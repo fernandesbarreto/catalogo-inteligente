@@ -22,7 +22,7 @@ export class UserRepoPrisma implements IUserRepo {
 
   async findByEmail(email: string) {
     const u = await this.prisma.user.findUnique({ where: { email } });
-    return u ? { id: u.id, email: u.email } : null;
+    return u ? { id: u.id, email: u.email, passwordHash: u.password } : null;
   }
 
   async list(skip: number, take: number) {

@@ -14,12 +14,18 @@ import { ListPaints } from "../../../use-cases/paints/ListPaints";
 import { GetPaint } from "../../../use-cases/paints/GetPaint";
 import { DeletePaint } from "../../../use-cases/paints/DeletePaint";
 import { makePaintsController } from "./controllers/paints.controller";
+import { Login } from "../../../use-cases/auth/login";
+import { makeAuthController } from "./controllers/auth.controller";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 const prisma = new PrismaClient();
+const userRepo = new UserRepoPrisma(prisma);
+
+// Auth
+const authCtl = makeAuthController(new Login(userRepo));
 
 // Users
-const userRepo = new UserRepoPrisma(prisma);
 const usersCtl = makeUsersController({
   create: new CreateUser(userRepo),
   update: new UpdateUser(userRepo),
@@ -28,11 +34,17 @@ const usersCtl = makeUsersController({
   delete: new DeleteUser(userRepo),
 });
 
+router.post("/auth/login", authCtl.login);
+
+// Users (require authentication)
+router.use("/users", requireAuth);
 router.get("/users", usersCtl.list);
 router.post("/users", usersCtl.create);
 router.get("/users/:id", usersCtl.get);
 router.put("/users/:id", usersCtl.update);
 router.delete("/users/:id", usersCtl.remove);
+
+router.use("/paints", requireAuth);
 
 // Paints
 const paintRepo = new PaintRepoPrisma(prisma);

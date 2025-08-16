@@ -13,7 +13,9 @@ export interface IUserRepo {
 
   findById(id: string): Promise<{ id: string; email: string } | null>;
 
-  findByEmail(email: string): Promise<{ id: string; email: string } | null>;
+  findByEmail(
+    email: string
+  ): Promise<{ id: string; email: string; passwordHash: string } | null>;
 
   list(
     skip: number,
