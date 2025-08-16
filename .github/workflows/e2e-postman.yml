@@ -27,6 +27,8 @@ jobs:
       NODE_ENV: test
       PORT: 3000
       DATABASE_URL: postgres://app:app@localhost:5432/appdb
+      JWT_SECRET: ${{ secrets.JWT_SECRET }} # <-- adicione (ou um valor fixo apenas para CI)
+      JWT_EXPIRES_IN: 1h
       # Se sua app ler OPENAI_API_KEY ou afins, injete via Secrets:
       # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
