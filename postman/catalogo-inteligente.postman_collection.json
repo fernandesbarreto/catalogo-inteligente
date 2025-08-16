@@ -15,8 +15,8 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
+              "raw": "http://localhost:3000/health",
+              "host": ["http://localhost:3000"],
               "path": ["health"]
             }
           },
