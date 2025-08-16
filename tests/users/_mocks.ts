@@ -5,4 +5,7 @@ export const makeRepo = () => ({
   list: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
+  findRoles: jest.fn(),
+  addRole: jest.fn(),
+  removeRole: jest.fn(),
 });
