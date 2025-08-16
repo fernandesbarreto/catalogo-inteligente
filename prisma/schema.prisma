@@ -41,11 +41,13 @@ model Paint {
   id          String   @id @default(cuid())
   name        String
   color       String
+  colorHex    String   @map("color_hex")
   surfaceType String   @map("surface_type")
   roomType    String   @map("room_type")
   finish      String
   features    String?
   line        String?
+  embedding   Unsupported("vector(1536)")?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt      @map("updated_at")
 
