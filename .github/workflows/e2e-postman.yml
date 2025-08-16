@@ -1,0 +1,95 @@
+name: E2E - Postman (Newman)
+
+on:
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: appdb
+        options: >-
+          --health-cmd="pg_isready -U app -d appdb"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=25
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: postgres://app:app@localhost:5432/appdb
+      # Se sua app ler OPENAI_API_KEY ou afins, injete via Secrets:
+      # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci || npm i --no-audit --no-fund
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Prepare DB (enable pgvector) and Migrate
+        run: |
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          npx prisma migrate deploy
+
+      # --- Iniciar a API ---
+      # Escolha 1: rodar build + node dist/ (recomendado se você tem scripts de build/start)
+      - name: Build app
+        run: npm run build --if-present
+
+      - name: Start API
+        run: |
+          if [ -f "dist/server.js" ]; then
+            node dist/server.js &
+          else
+            # fallback: usar ts-node direto se não houver build
+            npx ts-node src/server.ts &
+          fi
+        shell: bash
+
+      - name: Wait for API to be ready
+        run: |
+          for i in {1..30}; do
+            if curl -fsS "http://localhost:${PORT}/health" > /dev/null; then
+              echo "API is up!"; exit 0
+            fi
+            echo "Waiting API... ($i)"
+            sleep 2
+          done
+          echo "API did not start in time"; exit 1
+
+      - name: Install Newman
+        run: npm i -g newman
+
+      - name: Run Postman collection (Newman)
+        run: |
+          newman run postman/catalogo-inteligente.postman_collection.json \
+            -e postman/catalogo-inteligente.local.postman_environment.json \
+            --env-var baseUrl="http://localhost:${PORT}/bff" \
+            --reporters cli,junit --reporter-junit-export newman-results.xml
+
+      - name: Upload Newman report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-report
+          path: newman-results.xml
