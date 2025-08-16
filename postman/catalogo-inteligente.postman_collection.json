@@ -10,18 +10,14 @@
       "name": "Health",
       "item": [
         {
-          "name": "GET {{baseUrl}}/health",
+          "name": "http://localhost:3000/health",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
             }
           },
           "event": [
@@ -51,12 +47,8 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/users",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
             }
           },
           "event": [
@@ -88,12 +80,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/users",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
             }
           },
           "event": [
@@ -101,9 +89,7 @@
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
-                "exec": [
-                  "pm.variables.set('timestamp', Date.now());"
-                ]
+                "exec": ["pm.variables.set('timestamp', Date.now());"]
               }
             },
             {
@@ -127,13 +113,8 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/users/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                ":id"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", ":id"]
             }
           },
           "event": [
@@ -173,13 +154,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/users/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                ":id"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", ":id"]
             }
           },
           "event": [
@@ -209,13 +185,8 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/users/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                ":id"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", ":id"]
             }
           },
           "event": [
@@ -250,12 +221,8 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/paints",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "paints"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["paints"]
             }
           },
           "event": [
@@ -287,12 +254,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/paints",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "paints"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["paints"]
             }
           },
           "event": [
@@ -316,13 +279,8 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/paints/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "paints",
-                ":id"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["paints", ":id"]
             }
           },
           "event": [
@@ -362,13 +320,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/paints/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "paints",
-                ":id"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["paints", ":id"]
             }
           },
           "event": [
@@ -398,13 +351,8 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/paints/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "paints",
-                ":id"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["paints", ":id"]
             }
           },
           "event": [
