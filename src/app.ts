@@ -1,5 +1,5 @@
 import express from "express";
-import bffRouter from "./interface/http/bff/routes"; // <— importe o router (default)
+import bffRouter from "./interface/http/bff/routes";
 
 export function makeApp() {
   const app = express();
@@ -7,7 +7,6 @@ export function makeApp() {
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
-  // monte o BFF aqui:
   app.use("/bff", bffRouter);
 
   return app;
