@@ -1,31 +1,49 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+
+// Repos
 import { UserRepoPrisma } from "../../../infra/db/repositories/UserRepoPrisma";
+import { PaintRepoPrisma } from "../../../infra/db/repositories/PaintRepoPrisma";
+
+// Use cases - Users
 import { CreateUser } from "../../../use-cases/users/CreateUser";
 import { UpdateUser } from "../../../use-cases/users/UpdateUser";
 import { ListUsers } from "../../../use-cases/users/ListUsers";
 import { GetUser } from "../../../use-cases/users/GetUser";
 import { DeleteUser } from "../../../use-cases/users/DeleteUser";
-import { makeUsersController } from "./controllers/users.controller";
-import { PaintRepoPrisma } from "../../../infra/db/repositories/PaintRepoPrisma";
+
+// Use cases - Paints
 import { CreatePaint } from "../../../use-cases/paints/CreatePaint";
 import { UpdatePaint } from "../../../use-cases/paints/UpdatePaint";
 import { ListPaints } from "../../../use-cases/paints/ListPaints";
 import { GetPaint } from "../../../use-cases/paints/GetPaint";
 import { DeletePaint } from "../../../use-cases/paints/DeletePaint";
+
+// Controllers
+import { makeUsersController } from "./controllers/users.controller";
 import { makePaintsController } from "./controllers/paints.controller";
-import { Login } from "../../../use-cases/auth/login";
 import { makeAuthController } from "./controllers/auth.controller";
+import { makeUserRolesController } from "./controllers/user-roles.controller";
+
+// Auth
+import { Login } from "../../../use-cases/auth/login"; // <- confira caixa/arquivo
 import { requireAuth } from "../middlewares/requireAuth";
+import { attachRoles } from "../middlewares/attachRoles";
+import { requireRole } from "../middlewares/requireRole";
 
 const router = Router();
 const prisma = new PrismaClient();
+
 const userRepo = new UserRepoPrisma(prisma);
+const paintRepo = new PaintRepoPrisma(prisma);
 
-// Auth
+// AUTH
 const authCtl = makeAuthController(new Login(userRepo));
+router.post("/auth/login", authCtl.login);
 
-// Users
+router.use(requireAuth, attachRoles);
+
+// USERS (somente ADMIN)
 const usersCtl = makeUsersController({
   create: new CreateUser(userRepo),
   update: new UpdateUser(userRepo),
@@ -34,20 +52,23 @@ const usersCtl = makeUsersController({
   delete: new DeleteUser(userRepo),
 });
 
-router.post("/auth/login", authCtl.login);
+router.get("/users", requireRole("ADMIN"), usersCtl.list);
+router.post("/users", requireRole("ADMIN"), usersCtl.create);
+router.get("/users/:id", requireRole("ADMIN"), usersCtl.get);
+router.put("/users/:id", requireRole("ADMIN"), usersCtl.update);
+router.delete("/users/:id", requireRole("ADMIN"), usersCtl.remove);
 
-// Users (require authentication)
-router.use("/users", requireAuth);
-router.get("/users", usersCtl.list);
-router.post("/users", usersCtl.create);
-router.get("/users/:id", usersCtl.get);
-router.put("/users/:id", usersCtl.update);
-router.delete("/users/:id", usersCtl.remove);
+// USER ROLES mgmt (somente ADMIN)
+const userRolesCtl = makeUserRolesController(userRepo);
+router.get("/users/:id/roles", requireRole("ADMIN"), userRolesCtl.list);
+router.post("/users/:id/roles", requireRole("ADMIN"), userRolesCtl.add);
+router.delete(
+  "/users/:id/roles/:role",
+  requireRole("ADMIN"),
+  userRolesCtl.remove
+);
 
-router.use("/paints", requireAuth);
-
-// Paints
-const paintRepo = new PaintRepoPrisma(prisma);
+// PAINTS
 const paintsCtl = makePaintsController({
   create: new CreatePaint(paintRepo),
   update: new UpdatePaint(paintRepo),
@@ -56,10 +77,17 @@ const paintsCtl = makePaintsController({
   delete: new DeletePaint(paintRepo),
 });
 
-router.get("/paints", paintsCtl.list);
-router.post("/paints", paintsCtl.create);
-router.get("/paints/:id", paintsCtl.get);
-router.put("/paints/:id", paintsCtl.update);
-router.delete("/paints/:id", paintsCtl.remove);
+// leitura para qualquer autenticado
+router.get("/paints", requireRole("ADMIN", "EDITOR", "VIEWER"), paintsCtl.list);
+router.get(
+  "/paints/:id",
+  requireRole("ADMIN", "EDITOR", "VIEWER"),
+  paintsCtl.get
+);
+
+// escrita restrita
+router.post("/paints", requireRole("ADMIN", "EDITOR"), paintsCtl.create);
+router.put("/paints/:id", requireRole("ADMIN", "EDITOR"), paintsCtl.update);
+router.delete("/paints/:id", requireRole("ADMIN"), paintsCtl.remove);
 
 export default router;
