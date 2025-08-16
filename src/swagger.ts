@@ -1,295 +1,299 @@
-import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerJsdoc from "swagger-jsdoc";
 
 const options: swaggerJsdoc.Options = {
   definition: {
-    openapi: '3.0.0',
+    openapi: "3.0.0",
     info: {
-      title: 'Catálogo Inteligente API',
-      version: '1.0.0',
-      description: 'API for managing users, paints, and role-based access control',
+      title: "Catálogo Inteligente API",
+      version: "1.0.0",
+      description:
+        "API for managing users, paints, and role-based access control",
       contact: {
-        name: 'API Support',
-        email: 'support@example.com'
-      }
+        name: "API Support",
+        email: "support@example.com",
+      },
     },
     servers: [
       {
-        url: 'http://localhost:3000/bff',
-        description: 'Development server'
-      }
+        url: "http://localhost:3000/bff",
+        description: "Development server",
+      },
     ],
     components: {
       securitySchemes: {
         bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT'
-        }
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
       },
       schemas: {
         User: {
-          type: 'object',
+          type: "object",
           properties: {
             id: {
-              type: 'string',
-              description: 'User unique identifier'
+              type: "string",
+              description: "User unique identifier",
             },
             email: {
-              type: 'string',
-              format: 'email',
-              description: 'User email address'
+              type: "string",
+              format: "email",
+              description: "User email address",
             },
             createdAt: {
-              type: 'string',
-              format: 'date-time',
-              description: 'User creation timestamp'
+              type: "string",
+              format: "date-time",
+              description: "User creation timestamp",
             },
             updatedAt: {
-              type: 'string',
-              format: 'date-time',
-              description: 'User last update timestamp'
-            }
+              type: "string",
+              format: "date-time",
+              description: "User last update timestamp",
+            },
           },
-          required: ['id', 'email']
+          required: ["id", "email"],
         },
         CreateUserRequest: {
-          type: 'object',
+          type: "object",
           properties: {
             email: {
-              type: 'string',
-              format: 'email',
-              description: 'User email address'
+              type: "string",
+              format: "email",
+              description: "User email address",
             },
             password: {
-              type: 'string',
+              type: "string",
               minLength: 6,
-              description: 'User password (minimum 6 characters)'
-            }
+              description: "User password (minimum 6 characters)",
+            },
           },
-          required: ['email', 'password']
+          required: ["email", "password"],
         },
         UpdateUserRequest: {
-          type: 'object',
+          type: "object",
           properties: {
             email: {
-              type: 'string',
-              format: 'email',
-              description: 'User email address'
+              type: "string",
+              format: "email",
+              description: "User email address",
             },
             password: {
-              type: 'string',
+              type: "string",
               minLength: 6,
-              description: 'User password (minimum 6 characters)'
-            }
-          }
+              description: "User password (minimum 6 characters)",
+            },
+          },
         },
         LoginRequest: {
-          type: 'object',
+          type: "object",
           properties: {
             email: {
-              type: 'string',
-              format: 'email',
-              description: 'User email address'
+              type: "string",
+              format: "email",
+              description: "User email address",
             },
             password: {
-              type: 'string',
-              description: 'User password'
-            }
+              type: "string",
+              description: "User password",
+            },
           },
-          required: ['email', 'password']
+          required: ["email", "password"],
         },
         LoginResponse: {
-          type: 'object',
+          type: "object",
           properties: {
             accessToken: {
-              type: 'string',
-              description: 'JWT access token'
-            }
+              type: "string",
+              description: "JWT access token",
+            },
           },
-          required: ['accessToken']
+          required: ["accessToken"],
         },
         Paint: {
-          type: 'object',
+          type: "object",
           properties: {
             id: {
-              type: 'string',
-              description: 'Paint unique identifier'
+              type: "string",
+              description: "Paint unique identifier",
             },
             name: {
-              type: 'string',
-              description: 'Paint name'
+              type: "string",
+              description: "Paint name",
             },
             color: {
-              type: 'string',
-              description: 'Paint color name'
+              type: "string",
+              description: "Paint color name",
             },
             colorHex: {
-              type: 'string',
-              pattern: '^#[0-9A-Fa-f]{6}$',
-              description: 'Paint color in hexadecimal format (e.g., #96E9B1)'
+              type: "string",
+              pattern: "^#[0-9A-Fa-f]{6}$",
+              description: "Paint color in hexadecimal format (e.g., #96E9B1)",
             },
             surfaceType: {
-              type: 'string',
-              description: 'Type of surface this paint is suitable for'
+              type: "string",
+              description: "Type of surface this paint is suitable for",
             },
             roomType: {
-              type: 'string',
-              description: 'Type of room this paint is suitable for'
+              type: "string",
+              description: "Type of room this paint is suitable for",
             },
             finish: {
-              type: 'string',
-              description: 'Paint finish type'
+              type: "string",
+              description: "Paint finish type",
             },
             features: {
-              type: 'string',
-              description: 'Additional paint features'
+              type: "string",
+              description: "Additional paint features",
             },
             line: {
-              type: 'string',
-              description: 'Paint line/brand'
+              type: "string",
+              description: "Paint line/brand",
             },
             createdAt: {
-              type: 'string',
-              format: 'date-time',
-              description: 'Paint creation timestamp'
+              type: "string",
+              format: "date-time",
+              description: "Paint creation timestamp",
             },
             updatedAt: {
-              type: 'string',
-              format: 'date-time',
-              description: 'Paint last update timestamp'
-            }
+              type: "string",
+              format: "date-time",
+              description: "Paint last update timestamp",
+            },
           },
-          required: ['id', 'name', 'color', 'colorHex']
+          required: ["id", "name", "color", "colorHex"],
         },
         CreatePaintRequest: {
-          type: 'object',
+          type: "object",
           properties: {
             name: {
-              type: 'string',
-              description: 'Paint name'
+              type: "string",
+              description: "Paint name",
             },
             color: {
-              type: 'string',
-              description: 'Paint color name'
+              type: "string",
+              description: "Paint color name",
             },
             colorHex: {
-              type: 'string',
-              pattern: '^#[0-9A-Fa-f]{6}$',
-              description: 'Paint color in hexadecimal format (e.g., #96E9B1)'
+              type: "string",
+              pattern: "^#[0-9A-Fa-f]{6}$",
+              description: "Paint color in hexadecimal format (e.g., #96E9B1)",
             },
             surfaceType: {
-              type: 'string',
-              description: 'Type of surface this paint is suitable for'
+              type: "string",
+              description: "Type of surface this paint is suitable for",
             },
             roomType: {
-              type: 'string',
-              description: 'Type of room this paint is suitable for'
+              type: "string",
+              description: "Type of room this paint is suitable for",
             },
             finish: {
-              type: 'string',
-              description: 'Paint finish type'
+              type: "string",
+              description: "Paint finish type",
             },
             features: {
-              type: 'string',
-              description: 'Additional paint features'
+              type: "string",
+              description: "Additional paint features",
             },
             line: {
-              type: 'string',
-              description: 'Paint line/brand'
-            }
+              type: "string",
+              description: "Paint line/brand",
+            },
           },
-          required: ['name', 'color', 'colorHex']
+          required: ["name", "color", "colorHex"],
         },
         UpdatePaintRequest: {
-          type: 'object',
+          type: "object",
           properties: {
             name: {
-              type: 'string',
-              description: 'Paint name'
+              type: "string",
+              description: "Paint name",
             },
             color: {
-              type: 'string',
-              description: 'Paint color name'
+              type: "string",
+              description: "Paint color name",
             },
             colorHex: {
-              type: 'string',
-              pattern: '^#[0-9A-Fa-f]{6}$',
-              description: 'Paint color in hexadecimal format (e.g., #96E9B1)'
+              type: "string",
+              pattern: "^#[0-9A-Fa-f]{6}$",
+              description: "Paint color in hexadecimal format (e.g., #96E9B1)",
             },
             surfaceType: {
-              type: 'string',
-              description: 'Type of surface this paint is suitable for'
+              type: "string",
+              description: "Type of surface this paint is suitable for",
             },
             roomType: {
-              type: 'string',
-              description: 'Type of room this paint is suitable for'
+              type: "string",
+              description: "Type of room this paint is suitable for",
             },
             finish: {
-              type: 'string',
-              description: 'Paint finish type'
+              type: "string",
+              description: "Paint finish type",
             },
             features: {
-              type: 'string',
-              description: 'Additional paint features'
+              type: "string",
+              description: "Additional paint features",
             },
             line: {
-              type: 'string',
-              description: 'Paint line/brand'
-            }
-          }
+              type: "string",
+              description: "Paint line/brand",
+            },
+          },
         },
         UserRoles: {
-          type: 'object',
+          type: "object",
           properties: {
             userId: {
-              type: 'string',
-              description: 'User unique identifier'
+              type: "string",
+              description: "User unique identifier",
             },
             roles: {
-              type: 'array',
+              type: "array",
               items: {
-                type: 'string',
-                enum: ['ADMIN', 'EDITOR', 'VIEWER']
+                type: "string",
+                enum: ["ADMIN", "EDITOR", "VIEWER"],
               },
-              description: 'List of user roles'
-            }
+              description: "List of user roles",
+            },
           },
-          required: ['userId', 'roles']
+          required: ["userId", "roles"],
         },
         AddRoleRequest: {
-          type: 'object',
+          type: "object",
           properties: {
             role: {
-              type: 'string',
-              enum: ['ADMIN', 'EDITOR', 'VIEWER'],
-              description: 'Role to add to user'
-            }
+              type: "string",
+              enum: ["ADMIN", "EDITOR", "VIEWER"],
+              description: "Role to add to user",
+            },
           },
-          required: ['role']
+          required: ["role"],
         },
         Error: {
-          type: 'object',
+          type: "object",
           properties: {
             error: {
-              type: 'string',
-              description: 'Error code'
+              type: "string",
+              description: "Error code",
             },
             message: {
-              type: 'string',
-              description: 'Error message'
-            }
+              type: "string",
+              description: "Error message",
+            },
           },
-          required: ['error', 'message']
-        }
-      }
+          required: ["error", "message"],
+        },
+      },
     },
     security: [
       {
-        bearerAuth: []
-      }
-    ]
+        bearerAuth: [],
+      },
+    ],
   },
-  apis: ['./src/interface/http/bff/controllers/*.ts', './src/interface/http/bff/dto/*.ts']
+  apis: [
+    "src/interface/http/bff/controllers/*.ts",
+    "src/interface/http/bff/dto/*.ts",
+  ],
 };
 
 export const specs = swaggerJsdoc(options);

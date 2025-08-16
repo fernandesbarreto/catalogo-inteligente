@@ -38,12 +38,15 @@ const prisma = new PrismaClient();
 
 // Swagger documentation
 router.use("/docs", swaggerUi.serve);
-router.get("/docs", swaggerUi.setup(specs, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: "Catálogo Inteligente API Documentation"
-}));
+router.get(
+  "/docs",
+  swaggerUi.setup(specs, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Catálogo Inteligente API Documentation",
+  })
+);
 router.get("/docs/swagger.json", (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader("Content-Type", "application/json");
   res.send(specs);
 });
 
