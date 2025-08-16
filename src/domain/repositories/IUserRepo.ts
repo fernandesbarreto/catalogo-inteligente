@@ -28,4 +28,10 @@ export interface IUserRepo {
   ): Promise<{ id: string; email: string }>;
 
   delete(id: string): Promise<void>;
+
+  findRoles(userId: string): Promise<string[]>;
+
+  addRole(userId: string, roleName: string): Promise<void>;
+
+  removeRole(userId: string, roleName: string): Promise<void>;
 }

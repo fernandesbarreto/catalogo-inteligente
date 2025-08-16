@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 
 export const makeUserRolesController = (repo: any) => ({
+
   /**
    * @swagger
    * /users/{id}/roles:
@@ -44,10 +45,12 @@ export const makeUserRolesController = (repo: any) => ({
    *             schema:
    *               $ref: '#/components/schemas/Error'
    */
+
   list: async (req: Request, res: Response) => {
     const roles = await repo.findRoles(req.params.id);
     res.json({ userId: req.params.id, roles });
   },
+
 
   /**
    * @swagger
@@ -99,6 +102,7 @@ export const makeUserRolesController = (repo: any) => ({
    *             schema:
    *               $ref: '#/components/schemas/Error'
    */
+
   add: async (req: Request, res: Response) => {
     const body = z
       .object({ role: z.enum(["ADMIN", "EDITOR", "VIEWER"]) })

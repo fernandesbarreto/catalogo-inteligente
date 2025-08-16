@@ -22,9 +22,10 @@ model User {
 }
 
 model Role {
-  id    String    @id @default(cuid())
-  name  String    @unique
+  id    String  @id @default(cuid())
+  name  String  @unique
   users UserRole[]
+  @@map("roles")
 }
 
 model UserRole {
@@ -33,6 +34,7 @@ model UserRole {
   user   User @relation(fields: [userId], references: [id])
   role   Role @relation(fields: [roleId], references: [id])
   @@id([userId, roleId])
+  @@map("user_roles")
 }
 
 model Paint {
