@@ -1,5 +1,9 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import swaggerUi from "swagger-ui-express";
+import { specs } from "../../../swagger";
+
+// Repos
 import { UserRepoPrisma } from "../../../infra/db/repositories/UserRepoPrisma";
 import { CreateUser } from "../../../use-cases/users/CreateUser";
 import { UpdateUser } from "../../../use-cases/users/UpdateUser";
@@ -20,6 +24,21 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Swagger documentation
+router.use("/docs", swaggerUi.serve);
+router.get(
+  "/docs",
+  swaggerUi.setup(specs, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Catálogo Inteligente API Documentation",
+  })
+);
+router.get("/docs/swagger.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(specs);
+});
+
 const userRepo = new UserRepoPrisma(prisma);
 
 // Auth
