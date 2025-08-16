@@ -27,7 +27,7 @@ jobs:
       NODE_ENV: test
       PORT: 3000
       DATABASE_URL: postgres://app:app@localhost:5432/appdb
-      JWT_SECRET: ${{ secrets.JWT_SECRET }} # <-- adicione (ou um valor fixo apenas para CI)
+      JWT_SECRET: ci-only-super-secret-1f4c7a64b1c14f5e8c3d0a2b7d9f123
       JWT_EXPIRES_IN: 1h
       # Se sua app ler OPENAI_API_KEY ou afins, injete via Secrets:
       # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -59,6 +59,11 @@ jobs:
         run: npm run build --if-present
 
       - name: Start API
+        env:
+          PORT: ${{ env.PORT }}
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          JWT_SECRET: ${{ env.JWT_SECRET }}
+          JWT_EXPIRES_IN: ${{ env.JWT_EXPIRES_IN }}
         run: |
           if [ -f "dist/server.js" ]; then
             node dist/server.js &
