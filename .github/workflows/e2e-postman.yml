@@ -53,11 +53,8 @@ jobs:
           psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS vector;'
           npx prisma migrate deploy
 
-      - name: Seed admin
+      - name: Seed admin and roles
         run: npx ts-node scripts/seed-admin.ts
-
-      - name: Seed roles
-        run: npx ts-node scripts/seed-roles.ts
 
       # --- Iniciar a API ---
       # Escolha 1: rodar build + node dist/ (recomendado se você tem scripts de build/start)
