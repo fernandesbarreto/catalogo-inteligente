@@ -4,7 +4,15 @@ import bcrypt from "bcryptjs";
 export class CreateUser {
   constructor(private users: IUserRepo) {}
   async exec({ email, password }: { email: string; password: string }) {
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      throw new Error("Invalid email");
+    }
+    if (!password || password.length < 6) {
+      throw new Error("Password must be at least 6 characters");
+    }
+
     const hash = await bcrypt.hash(password, 10);
-    return this.users.create({ email, passwordHash: hash });
+    const created = await this.users.create({ email, passwordHash: hash });
+    return { id: created.id, email: created.email };
   }
 }
