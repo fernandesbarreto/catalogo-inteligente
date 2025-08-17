@@ -80,13 +80,6 @@ export class FilterSearchTool implements ISearchTool {
         }
       }
 
-      console.log(`[FilterSearchTool] Query: "${query}"`);
-      console.log(`[FilterSearchTool] Query lower: "${queryLower}"`);
-      console.log(
-        `[FilterSearchTool] Color variations found:`,
-        colorVariations
-      );
-
       // Se encontramos variações de cor, priorizar busca por cor
       if (colorVariations.length > 0) {
         where.OR = colorVariations.map((color) => ({
@@ -104,11 +97,6 @@ export class FilterSearchTool implements ISearchTool {
         ];
       }
     }
-
-    console.log(
-      `[FilterSearchTool] Final where clause:`,
-      JSON.stringify(where, null, 2)
-    );
 
     const paints = await this.prisma.paint.findMany({
       where,
