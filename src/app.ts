@@ -1,12 +1,15 @@
 import express from "express";
 import bffRouter from "./interface/http/bff/routes";
 import { ZodError } from "zod";
+import aiRoutes from "./interface/http/bff/routes/ai.routes";
 
 export function makeApp() {
   const app = express();
   app.use(express.json());
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
+
+  app.use("/ai", aiRoutes);
 
   app.use("/bff", bffRouter);
 
