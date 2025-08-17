@@ -100,10 +100,8 @@ export class RecommendationAgent {
   }
 
   private shouldUseSemanticSearch(query: string): boolean {
+    // Keywords that indicate complex semantic needs (not just simple filters)
     const semanticKeywords = [
-      "para",
-      "com",
-      "que",
       "ideal",
       "perfeito",
       "adequado",
@@ -114,15 +112,54 @@ export class RecommendationAgent {
       "antimofo",
       "sem cheiro",
       "durabilidade",
+      "harmonioso",
+      "combinar",
+      "estilo",
+      "ambiente",
+      "decoração",
+    ];
+
+    // Simple color/attribute keywords that should use filter search
+    const filterKeywords = [
+      "branco", "branca", "white",
+      "preto", "preta", "black", 
+      "azul", "blue",
+      "vermelho", "vermelha", "red",
+      "verde", "green",
+      "amarelo", "amarela", "yellow",
+      "rosa", "pink",
+      "cinza", "gray", "grey",
+      "marrom", "brown",
+      "laranja", "orange",
+      "roxo", "purple",
+      "bege", "beige",
     ];
 
     const queryLower = query.toLowerCase();
+    
+    // Check if query contains specific color/attribute keywords
+    const hasFilterKeywords = filterKeywords.some((keyword) =>
+      queryLower.includes(keyword)
+    );
+
+    // Check if query contains complex semantic keywords
     const hasSemanticKeywords = semanticKeywords.some((keyword) =>
       queryLower.includes(keyword)
     );
 
-    // Se tem palavras semânticas ou é uma frase longa, usa busca semântica
-    return hasSemanticKeywords || query.split(" ").length > 3;
+    // Use semantic search if:
+    // 1. Has complex semantic keywords, OR
+    // 2. Is a very long query (>4 words) without specific color/attribute keywords
+    const wordCount = query.split(" ").length;
+    const shouldUseSemantic = hasSemanticKeywords || (wordCount > 4 && !hasFilterKeywords);
+
+    console.log(`[RecommendationAgent] Query: "${query}"`);
+    console.log(`[RecommendationAgent] Has filter keywords: ${hasFilterKeywords}`);
+    console.log(`[RecommendationAgent] Has semantic keywords: ${hasSemanticKeywords}`);
+    console.log(`[RecommendationAgent] Word count: ${wordCount}`);
+    console.log(`[RecommendationAgent] Using semantic search: ${shouldUseSemantic}`);
+
+    return shouldUseSemantic;
   }
 
   private removeDuplicates(picks: any[]): any[] {

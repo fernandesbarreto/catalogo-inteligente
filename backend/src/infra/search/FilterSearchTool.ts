@@ -38,12 +38,77 @@ export class FilterSearchTool implements ISearchTool {
 
     // Busca por texto nos campos relevantes
     if (query.trim()) {
-      where.OR = [
-        { name: { contains: query, mode: "insensitive" } },
-        { color: { contains: query, mode: "insensitive" } },
-        { features: { contains: query, mode: "insensitive" } },
-      ];
+      const queryLower = query.toLowerCase();
+
+      // Mapeamento de cores para incluir variações e sinônimos
+      const colorMappings: { [key: string]: string[] } = {
+        branco: ["branco", "white"],
+        branca: ["branca", "white", "branco"], // Include masculine form
+        white: ["white", "branco", "branca"],
+        preto: ["preto", "black"],
+        preta: ["preta", "black"],
+        black: ["black", "preto", "preta"],
+        azul: ["azul", "blue", "anil", "ciano"],
+        blue: ["blue", "azul", "anil", "ciano"],
+        vermelho: ["vermelho", "red", "vermelha"],
+        red: ["red", "vermelho", "vermelha"],
+        verde: ["verde", "green", "esmeralda", "jade"],
+        green: ["green", "verde", "esmeralda", "jade"],
+        amarelo: ["amarelo", "yellow", "amarela"],
+        yellow: ["yellow", "amarelo", "amarela"],
+        rosa: ["rosa", "pink"],
+        pink: ["pink", "rosa"],
+        cinza: ["cinza", "gray", "grey"],
+        gray: ["gray", "cinza"],
+        grey: ["grey", "cinza"],
+        marrom: ["marrom", "brown", "bronze"],
+        brown: ["brown", "marrom", "bronze"],
+        laranja: ["laranja", "orange", "âmbar"],
+        orange: ["orange", "laranja", "âmbar"],
+        roxo: ["roxo", "purple", "violeta"],
+        purple: ["purple", "roxo", "violeta"],
+        bege: ["bege", "beige"],
+        beige: ["beige", "bege"],
+      };
+
+      // Encontrar mapeamento de cores para a query
+      let colorVariations: string[] = [];
+      for (const [colorKey, variations] of Object.entries(colorMappings)) {
+        if (queryLower.includes(colorKey)) {
+          colorVariations = variations;
+          break;
+        }
+      }
+
+      console.log(`[FilterSearchTool] Query: "${query}"`);
+      console.log(`[FilterSearchTool] Query lower: "${queryLower}"`);
+      console.log(
+        `[FilterSearchTool] Color variations found:`,
+        colorVariations
+      );
+
+      // Se encontramos variações de cor, priorizar busca por cor
+      if (colorVariations.length > 0) {
+        where.OR = colorVariations.map((color) => ({
+          color: {
+            contains: color,
+            mode: "insensitive",
+          },
+        }));
+      } else {
+        // Busca direta por cor se não houver mapeamento
+        where.OR = [
+          { color: { contains: query, mode: "insensitive" } },
+          { name: { contains: query, mode: "insensitive" } },
+          { features: { contains: query, mode: "insensitive" } },
+        ];
+      }
     }
+
+    console.log(
+      `[FilterSearchTool] Final where clause:`,
+      JSON.stringify(where, null, 2)
+    );
 
     const paints = await this.prisma.paint.findMany({
       where,
