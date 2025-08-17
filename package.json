@@ -37,7 +37,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "jest"
+    "test": "jest",
+    "seed": "npx ts-node scripts/seed_paints.ts"
   },
   "repository": {
     "type": "git",
