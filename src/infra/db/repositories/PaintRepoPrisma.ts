@@ -10,7 +10,20 @@ export class PaintRepoPrisma implements IPaintRepo {
 
   async create(data: CreatePaintDTO) {
     const p = await this.prisma.paint.create({ data });
-    return p;
+    return p as { id: string } & CreatePaintDTO;
+  }
+
+  async createWithEmbedding(data: CreatePaintDTO, embedding: number[]) {
+    // Use raw SQL to handle the vector type
+    const result = await this.prisma.$queryRaw<
+      Array<{ id: string } & CreatePaintDTO>
+    >`
+      INSERT INTO paints (id, name, color, color_hex, surface_type, room_type, finish, features, line, embedding, created_at, updated_at)
+      VALUES (gen_random_uuid()::text, ${data.name}, ${data.color}, ${data.colorHex}, ${data.surfaceType}, ${data.roomType}, ${data.finish}, ${data.features}, ${data.line}, ${embedding}::vector, NOW(), NOW())
+      RETURNING id, name, color, color_hex, surface_type, room_type, finish, features, line, embedding::text as embedding, created_at, updated_at
+    `;
+
+    return result[0];
   }
 
   async findById(id: string) {

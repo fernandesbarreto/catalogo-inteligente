@@ -1,6 +1,7 @@
 export interface CreatePaintDTO {
   name: string;
   color: string;
+  colorHex: string;
   surfaceType: string;
   roomType: string;
   finish: string;
@@ -12,6 +13,10 @@ export interface UpdatePaintDTO extends Partial<CreatePaintDTO> {}
 
 export interface IPaintRepo {
   create(data: CreatePaintDTO): Promise<{ id: string } & CreatePaintDTO>;
+  createWithEmbedding(
+    data: CreatePaintDTO,
+    embedding: number[]
+  ): Promise<{ id: string } & CreatePaintDTO>;
   findById(id: string): Promise<({ id: string } & CreatePaintDTO) | null>;
   list(
     skip: number,
