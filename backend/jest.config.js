@@ -8,4 +8,9 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
+  testMatch: ["**/tests/**/*.spec.ts", "**/tests/**/*.test.ts"],
+  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts", "!src/server.ts"],
+  coverageDirectory: "coverage",
+  coverageReporters: ["text", "lcov", "html"],
 };

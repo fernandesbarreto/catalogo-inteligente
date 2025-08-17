@@ -6,9 +6,11 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.3.0",
     "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.2",
     "jest": "^30.0.5",
     "jest-junit": "^16.0.0",
     "prisma": "^6.14.0",
+    "supertest": "^7.0.0",
     "ts-jest": "^29.4.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
@@ -40,6 +42,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "jest",
+    "test:golden": "jest --testPathPatterns='tests/(ai|interface)/.*\\.spec\\.ts' --verbose",
+    "test:retriever": "jest tests/ai/retriever.smoke.spec.ts --verbose",
+    "test:routing": "jest tests/ai/agent.routing.spec.ts --verbose",
+    "test:e2e": "jest tests/interface/ai.e2e.spec.ts --verbose",
     "seed": "npx ts-node scripts/seed_paints.ts"
   },
   "repository": {
