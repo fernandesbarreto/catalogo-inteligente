@@ -82,6 +82,15 @@ export class RecommendationAgent {
         `[RecommendationAgent] Recomendação concluída em ${executionTime}ms. ${uniquePicks.length} resultados únicos`
       );
 
+      // Guard-rail: Se não há resultados válidos, retornar picks vazios
+      if (uniquePicks.length === 0) {
+        console.log(`[RecommendationAgent] Nenhum resultado válido encontrado`);
+        return {
+          picks: [],
+          notes: this.generateNotes(query.query, 0, shouldUseSemantic),
+        };
+      }
+
       return {
         picks: uniquePicks.slice(0, 5), // Limitar a 5 resultados
         notes: this.generateNotes(
@@ -121,22 +130,39 @@ export class RecommendationAgent {
 
     // Simple color/attribute keywords that should use filter search
     const filterKeywords = [
-      "branco", "branca", "white",
-      "preto", "preta", "black", 
-      "azul", "blue",
-      "vermelho", "vermelha", "red",
-      "verde", "green",
-      "amarelo", "amarela", "yellow",
-      "rosa", "pink",
-      "cinza", "gray", "grey",
-      "marrom", "brown",
-      "laranja", "orange",
-      "roxo", "purple",
-      "bege", "beige",
+      "branco",
+      "branca",
+      "white",
+      "preto",
+      "preta",
+      "black",
+      "azul",
+      "blue",
+      "vermelho",
+      "vermelha",
+      "red",
+      "verde",
+      "green",
+      "amarelo",
+      "amarela",
+      "yellow",
+      "rosa",
+      "pink",
+      "cinza",
+      "gray",
+      "grey",
+      "marrom",
+      "brown",
+      "laranja",
+      "orange",
+      "roxo",
+      "purple",
+      "bege",
+      "beige",
     ];
 
     const queryLower = query.toLowerCase();
-    
+
     // Check if query contains specific color/attribute keywords
     const hasFilterKeywords = filterKeywords.some((keyword) =>
       queryLower.includes(keyword)
@@ -151,13 +177,20 @@ export class RecommendationAgent {
     // 1. Has complex semantic keywords, OR
     // 2. Is a very long query (>4 words) without specific color/attribute keywords
     const wordCount = query.split(" ").length;
-    const shouldUseSemantic = hasSemanticKeywords || (wordCount > 4 && !hasFilterKeywords);
+    const shouldUseSemantic =
+      hasSemanticKeywords || (wordCount > 4 && !hasFilterKeywords);
 
     console.log(`[RecommendationAgent] Query: "${query}"`);
-    console.log(`[RecommendationAgent] Has filter keywords: ${hasFilterKeywords}`);
-    console.log(`[RecommendationAgent] Has semantic keywords: ${hasSemanticKeywords}`);
+    console.log(
+      `[RecommendationAgent] Has filter keywords: ${hasFilterKeywords}`
+    );
+    console.log(
+      `[RecommendationAgent] Has semantic keywords: ${hasSemanticKeywords}`
+    );
     console.log(`[RecommendationAgent] Word count: ${wordCount}`);
-    console.log(`[RecommendationAgent] Using semantic search: ${shouldUseSemantic}`);
+    console.log(
+      `[RecommendationAgent] Using semantic search: ${shouldUseSemantic}`
+    );
 
     return shouldUseSemantic;
   }
