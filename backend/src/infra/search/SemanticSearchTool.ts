@@ -24,10 +24,25 @@ export class SemanticSearchTool implements ISearchTool {
         `[SemanticSearchTool] Encontrados ${docs.length} resultados semânticos`
       );
 
-      return docs.map((doc, index) => ({
-        id: doc.metadata?.id || `semantic-${index}`,
-        reason: `Semântico: ${doc.pageContent.substring(0, 100)}...`,
-      }));
+      return docs.map((doc, index) => {
+        const metadata = doc.metadata || {};
+        const paintInfo = [
+          metadata.name,
+          metadata.color,
+          metadata.surfaceType,
+          metadata.roomType,
+          metadata.finish,
+        ]
+          .filter(Boolean)
+          .join(" - ");
+
+        return {
+          id: doc.metadata?.id || `semantic-${index}`,
+          reason: `Semântico: ${
+            paintInfo || doc.pageContent.substring(0, 80)
+          }...`,
+        };
+      });
     } catch (error) {
       console.error(`[SemanticSearchTool] Erro na busca semântica:`, error);
       return [];

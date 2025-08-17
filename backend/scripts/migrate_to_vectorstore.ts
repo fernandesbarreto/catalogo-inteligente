@@ -27,24 +27,33 @@ async function migrateToVectorStore() {
     const vectorStore = await makePgVectorStore();
 
     // Prepare documents for vector store
-    const documents = paints.map((paint) => ({
-      pageContent: `${paint.name} ${paint.color} ${paint.colorHex} ${
-        paint.surfaceType
-      } ${paint.roomType} ${paint.finish} ${paint.features || ""} ${
-        paint.line || ""
-      }`,
-      metadata: {
-        id: paint.id,
-        name: paint.name,
-        color: paint.color,
-        colorHex: paint.colorHex,
-        surfaceType: paint.surfaceType,
-        roomType: paint.roomType,
-        finish: paint.finish,
-        features: paint.features,
-        line: paint.line,
-      },
-    }));
+    const documents = paints.map((paint) => {
+      const parts = [
+        paint.name,
+        paint.color,
+        paint.colorHex,
+        paint.surfaceType,
+        paint.roomType,
+        paint.finish,
+        paint.features,
+        paint.line,
+      ].filter(part => part && part.trim()); // Filter out null, undefined, and empty strings
+      
+      return {
+        pageContent: parts.join(" "),
+        metadata: {
+          id: paint.id,
+          name: paint.name,
+          color: paint.color,
+          colorHex: paint.colorHex,
+          surfaceType: paint.surfaceType,
+          roomType: paint.roomType,
+          finish: paint.finish,
+          features: paint.features,
+          line: paint.line,
+        },
+      };
+    });
 
     console.log("Adding documents to vector store...");
 
