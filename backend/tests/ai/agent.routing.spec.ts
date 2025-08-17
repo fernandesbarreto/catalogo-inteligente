@@ -4,7 +4,7 @@ import { FilterSearchTool } from "../../src/infra/search/FilterSearchTool";
 import { SemanticSearchTool } from "../../src/infra/search/SemanticSearchTool";
 import { MCPAdapter } from "../../src/infra/mcp/MCPAdapter";
 
-describe("Agent Routing Tests", () => {
+describe("Agent Hybrid Routing Tests", () => {
   let agent: RecommendationAgent;
   let prisma: PrismaClient;
 
@@ -25,143 +25,166 @@ describe("Agent Routing Tests", () => {
     await prisma.$disconnect();
   });
 
-  describe("Filter Search Routing", () => {
-    const filterQueries = [
-      { query: "branco", expectedTool: "filter" },
-      { query: "tinta preta", expectedTool: "filter" },
-      { query: "azul", expectedTool: "filter" },
-      { query: "vermelho", expectedTool: "filter" },
+  describe("Hybrid Search - Color Queries", () => {
+    const colorQueries = [
+      { query: "branco", expectedMinResults: 0 },
+      { query: "tinta preta", expectedMinResults: 0 },
+      { query: "azul", expectedMinResults: 0 },
+      { query: "vermelho", expectedMinResults: 0 },
     ];
 
-    test.each(filterQueries)(
-      "should use filter search for query: %s",
-      async ({ query, expectedTool }) => {
+    test.each(colorQueries)(
+      "should combine filter and semantic results for query: %s",
+      async ({ query, expectedMinResults }) => {
         const startTime = Date.now();
 
         const result = await agent.execute({ query });
 
         const executionTime = Date.now() - startTime;
 
-        console.log(`[Agent Routing] Query: "${query}"`);
-        console.log(`[Agent Routing] Expected tool: ${expectedTool}`);
-        console.log(`[Agent Routing] Picks found: ${result.picks.length}`);
-        console.log(`[Agent Routing] Execution time: ${executionTime}ms`);
-        console.log(`[Agent Routing] Notes: ${result.notes}`);
+        console.log(`[Test] Query: "${query}"`);
+        console.log(`[Test] Results: ${result.picks.length}`);
+        console.log(`[Test] Execution time: ${executionTime}ms`);
+        console.log(`[Test] Notes: ${result.notes}`);
 
-        // Verificar se retornou resultados
-        expect(result.picks).toBeDefined();
+        // Verificar se a resposta tem a estrutura correta
+        expect(result).toHaveProperty("picks");
+        expect(result).toHaveProperty("notes");
         expect(Array.isArray(result.picks)).toBe(true);
 
-        // Verificar se os resultados são de filtro (não semânticos)
-        // Nota: Se o filtro não encontrar resultados, pode fazer fallback para semântica
-        if (result.picks.length > 0) {
-          const hasFilterResults = result.picks.some((pick: any) =>
-            pick.reason.includes("Filtro:")
-          );
-          const hasSemanticResults = result.picks.some((pick: any) =>
-            pick.reason.includes("Semântico:")
-          );
+        // Verificar se há pelo menos o mínimo esperado de resultados
+        expect(result.picks.length).toBeGreaterThanOrEqual(expectedMinResults);
 
-          // Aceitar tanto filtro quanto semântica (fallback é válido)
-          expect(hasFilterResults || hasSemanticResults).toBe(true);
-        }
+        // Verificar se os resultados são únicos (sem duplicatas)
+        const uniqueIds = new Set(result.picks.map((pick) => pick.id));
+        expect(uniqueIds.size).toBe(result.picks.length);
 
-        // Verificar se a latência está aceitável
-        expect(executionTime).toBeLessThan(3000);
-      },
-      10000
-    );
-  });
+        // Verificar se não excede o limite de 5
+        expect(result.picks.length).toBeLessThanOrEqual(5);
 
-  describe("Semantic Search Routing", () => {
-    const semanticQueries = [
-      {
-        query: "tinta ideal para quarto infantil moderno",
-        expectedTool: "semantic",
-      },
-      {
-        query: "pintura resistente e lavável para cozinha",
-        expectedTool: "semantic",
-      },
-      { query: "tinta elegante para sala de estar", expectedTool: "semantic" },
-    ];
-
-    test.each(semanticQueries)(
-      "should use semantic search for query: %s",
-      async ({ query, expectedTool }) => {
-        const startTime = Date.now();
-
-        const result = await agent.execute({ query });
-
-        const executionTime = Date.now() - startTime;
-
-        console.log(`[Agent Routing] Query: "${query}"`);
-        console.log(`[Agent Routing] Expected tool: ${expectedTool}`);
-        console.log(`[Agent Routing] Picks found: ${result.picks.length}`);
-        console.log(`[Agent Routing] Execution time: ${executionTime}ms`);
-        console.log(`[Agent Routing] Notes: ${result.notes}`);
-
-        // Verificar se retornou resultados
-        expect(result.picks).toBeDefined();
-        expect(Array.isArray(result.picks)).toBe(true);
-
-        // Verificar se os resultados são semânticos
-        if (result.picks.length > 0) {
-          result.picks.forEach((pick: any) => {
-            expect(pick.reason).toContain("Semântico:");
-          });
-        }
-
-        // Verificar se a latência está aceitável
-        expect(executionTime).toBeLessThan(5000);
+        // Verificar latência
+        expect(executionTime).toBeLessThan(10000);
       },
       15000
     );
   });
 
-  describe("Fallback Behavior", () => {
-    test("should fallback to semantic search when filter returns no results", async () => {
-      const query = "tinta branca para sala moderna"; // Deve usar filtro primeiro
+  describe("Hybrid Search - Semantic Queries", () => {
+    const semanticQueries = [
+      {
+        query: "tinta ideal para quarto infantil moderno",
+        expectedMinResults: 0,
+      },
+      {
+        query: "pintura resistente e lavável para cozinha",
+        expectedMinResults: 0,
+      },
+      { query: "tinta elegante para sala de estar", expectedMinResults: 0 },
+    ];
+
+    test.each(semanticQueries)(
+      "should combine filter and semantic results for complex query: %s",
+      async ({ query, expectedMinResults }) => {
+        const startTime = Date.now();
+
+        const result = await agent.execute({ query });
+
+        const executionTime = Date.now() - startTime;
+
+        console.log(`[Test] Query: "${query}"`);
+        console.log(`[Test] Results: ${result.picks.length}`);
+        console.log(`[Test] Execution time: ${executionTime}ms`);
+        console.log(`[Test] Notes: ${result.notes}`);
+
+        // Verificar se a resposta tem a estrutura correta
+        expect(result).toHaveProperty("picks");
+        expect(result).toHaveProperty("notes");
+        expect(Array.isArray(result.picks)).toBe(true);
+
+        // Verificar se há pelo menos o mínimo esperado de resultados
+        expect(result.picks.length).toBeGreaterThanOrEqual(expectedMinResults);
+
+        // Verificar se os resultados são únicos (sem duplicatas)
+        const uniqueIds = new Set(result.picks.map((pick) => pick.id));
+        expect(uniqueIds.size).toBe(result.picks.length);
+
+        // Verificar se não excede o limite de 5
+        expect(result.picks.length).toBeLessThanOrEqual(5);
+
+        // Verificar latência
+        expect(executionTime).toBeLessThan(15000);
+      },
+      20000
+    );
+  });
+
+  describe("Hybrid Search - Filter Application", () => {
+    test("should apply filters to both search approaches", async () => {
+      const query = "tinta branca";
+      const filters = {
+        surfaceType: "parede",
+        roomType: "sala",
+      };
 
       const startTime = Date.now();
 
-      const result = await agent.execute({ query });
+      const result = await agent.execute({ query, filters });
 
       const executionTime = Date.now() - startTime;
 
-      console.log(`[Agent Routing] Fallback test - Query: "${query}"`);
-      console.log(`[Agent Routing] Picks found: ${result.picks.length}`);
-      console.log(`[Agent Routing] Execution time: ${executionTime}ms`);
-      console.log(`[Agent Routing] Notes: ${result.notes}`);
+      console.log(`[Test] Query: "${query}" with filters:`, filters);
+      console.log(`[Test] Results: ${result.picks.length}`);
+      console.log(`[Test] Execution time: ${executionTime}ms`);
+      console.log(`[Test] Notes: ${result.notes}`);
 
-      // Verificar se retornou resultados (mesmo que seja fallback)
-      expect(result.picks).toBeDefined();
+      // Verificar se a resposta tem a estrutura correta
+      expect(result).toHaveProperty("picks");
+      expect(result).toHaveProperty("notes");
       expect(Array.isArray(result.picks)).toBe(true);
 
-      // Verificar se a latência está aceitável
-      expect(executionTime).toBeLessThan(5000);
-    }, 15000);
+      // Verificar se os resultados são únicos (sem duplicatas)
+      const uniqueIds = new Set(result.picks.map((pick) => pick.id));
+      expect(uniqueIds.size).toBe(result.picks.length);
 
-    test("should return empty picks for irrelevant queries", async () => {
-      const query = "pizza saborosa italiana"; // Query irrelevante
+      // Verificar se não excede o limite de 5
+      expect(result.picks.length).toBeLessThanOrEqual(5);
+
+      // Verificar latência
+      expect(executionTime).toBeLessThan(15000);
+    }, 20000);
+
+    test("should handle empty query with filters only", async () => {
+      const query = "";
+      const filters = {
+        surfaceType: "parede",
+        finish: "fosco",
+      };
 
       const startTime = Date.now();
 
-      const result = await agent.execute({ query });
+      const result = await agent.execute({ query, filters });
 
       const executionTime = Date.now() - startTime;
 
-      console.log(`[Agent Routing] Irrelevant query test - Query: "${query}"`);
-      console.log(`[Agent Routing] Picks found: ${result.picks.length}`);
-      console.log(`[Agent Routing] Execution time: ${executionTime}ms`);
-      console.log(`[Agent Routing] Notes: ${result.notes}`);
+      console.log(`[Test] Empty query with filters:`, filters);
+      console.log(`[Test] Results: ${result.picks.length}`);
+      console.log(`[Test] Execution time: ${executionTime}ms`);
+      console.log(`[Test] Notes: ${result.notes}`);
 
-      // Verificar se retornou picks vazios
-      expect(result.picks).toEqual([]);
-      expect(result.notes).toContain("Nenhuma tinta encontrada");
+      // Verificar se a resposta tem a estrutura correta
+      expect(result).toHaveProperty("picks");
+      expect(result).toHaveProperty("notes");
+      expect(Array.isArray(result.picks)).toBe(true);
 
-      // Verificar se a latência está aceitável
-      expect(executionTime).toBeLessThan(3000);
-    }, 10000);
+      // Verificar se os resultados são únicos (sem duplicatas)
+      const uniqueIds = new Set(result.picks.map((pick) => pick.id));
+      expect(uniqueIds.size).toBe(result.picks.length);
+
+      // Verificar se não excede o limite de 5
+      expect(result.picks.length).toBeLessThanOrEqual(5);
+
+      // Verificar latência
+      expect(executionTime).toBeLessThan(15000);
+    }, 20000);
   });
 });

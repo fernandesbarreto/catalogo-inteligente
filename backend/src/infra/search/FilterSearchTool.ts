@@ -20,6 +20,7 @@ export class FilterSearchTool implements ISearchTool {
 
     const where: any = {};
 
+    // Aplicar filtros específicos no SQL quando existirem
     if (filters?.surfaceType) {
       where.surfaceType = {
         contains: filters.surfaceType,
@@ -27,13 +28,22 @@ export class FilterSearchTool implements ISearchTool {
       };
     }
     if (filters?.roomType) {
-      where.roomType = { contains: filters.roomType, mode: "insensitive" };
+      where.roomType = {
+        contains: filters.roomType,
+        mode: "insensitive",
+      };
     }
     if (filters?.finish) {
-      where.finish = { contains: filters.finish, mode: "insensitive" };
+      where.finish = {
+        contains: filters.finish,
+        mode: "insensitive",
+      };
     }
     if (filters?.line) {
-      where.line = { contains: filters.line, mode: "insensitive" };
+      where.line = {
+        contains: filters.line,
+        mode: "insensitive",
+      };
     }
 
     // Busca por texto nos campos relevantes
@@ -96,6 +106,11 @@ export class FilterSearchTool implements ISearchTool {
           { features: { contains: query, mode: "insensitive" } },
         ];
       }
+    }
+
+    // Se não há query mas há filtros, buscar apenas por filtros
+    if (!query.trim() && filters && Object.keys(filters).length > 0) {
+      console.log(`[FilterSearchTool] Buscando apenas por filtros:`, filters);
     }
 
     const paints = await this.prisma.paint.findMany({

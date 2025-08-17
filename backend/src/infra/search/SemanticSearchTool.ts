@@ -25,7 +25,7 @@ export class SemanticSearchTool implements ISearchTool {
       );
 
       // Filtrar apenas documentos com IDs válidos e metadados completos
-      const validDocs = docs.filter((doc) => {
+      let validDocs = docs.filter((doc) => {
         const metadata = doc.metadata || {};
         return metadata.id && metadata.name && metadata.color;
       });
@@ -33,6 +33,51 @@ export class SemanticSearchTool implements ISearchTool {
       console.log(
         `[SemanticSearchTool] Documentos válidos: ${validDocs.length}/${docs.length}`
       );
+
+      // Aplicar filtros nos metadados quando existirem
+      if (filters && Object.keys(filters).length > 0) {
+        validDocs = validDocs.filter((doc) => {
+          const metadata = doc.metadata || {};
+
+          // Verificar filtros de superfície
+          if (filters.surfaceType && metadata.surfaceType) {
+            const surfaceMatch = metadata.surfaceType
+              .toLowerCase()
+              .includes(filters.surfaceType.toLowerCase());
+            if (!surfaceMatch) return false;
+          }
+
+          // Verificar filtros de tipo de ambiente
+          if (filters.roomType && metadata.roomType) {
+            const roomMatch = metadata.roomType
+              .toLowerCase()
+              .includes(filters.roomType.toLowerCase());
+            if (!roomMatch) return false;
+          }
+
+          // Verificar filtros de acabamento
+          if (filters.finish && metadata.finish) {
+            const finishMatch = metadata.finish
+              .toLowerCase()
+              .includes(filters.finish.toLowerCase());
+            if (!finishMatch) return false;
+          }
+
+          // Verificar filtros de linha
+          if (filters.line && metadata.line) {
+            const lineMatch = metadata.line
+              .toLowerCase()
+              .includes(filters.line.toLowerCase());
+            if (!lineMatch) return false;
+          }
+
+          return true;
+        });
+
+        console.log(
+          `[SemanticSearchTool] Após filtros: ${validDocs.length}/${docs.length}`
+        );
+      }
 
       // Se não há documentos válidos, retornar array vazio
       if (validDocs.length === 0) {

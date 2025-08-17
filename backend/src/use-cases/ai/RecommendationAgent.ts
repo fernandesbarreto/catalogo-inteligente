@@ -8,6 +8,14 @@ import {
 } from "../../interface/http/bff/dto/ai.dto";
 import { MCPAdapter } from "../../infra/mcp/MCPAdapter";
 
+interface RankedPick {
+  id: string;
+  reason: string;
+  filterRank?: number;
+  semanticRank?: number;
+  rrfScore?: number;
+}
+
 export class RecommendationAgent {
   constructor(
     private filterSearchTool: ISearchTool,
@@ -17,40 +25,24 @@ export class RecommendationAgent {
 
   async execute(query: RecommendationQuery): Promise<RecommendationResponse> {
     console.log(
-      `[RecommendationAgent] Iniciando recomendação para: "${query.query}"`
+      `[RecommendationAgent] Iniciando recomendação híbrida para: "${query.query}"`
     );
 
     const startTime = Date.now();
 
     try {
-      // Decidir qual tool usar baseado na query
-      const shouldUseSemantic = this.shouldUseSemanticSearch(query.query);
+      // Executar ambas as buscas em paralelo
+      const [filterPicks, semanticPicks] = await Promise.all([
+        this.filterSearchTool.execute(query.query, query.filters),
+        this.semanticSearchTool.execute(query.query, query.filters),
+      ]);
+
       console.log(
-        `[RecommendationAgent] Decisão: ${
-          shouldUseSemantic ? "semântica" : "filtros"
-        }`
+        `[RecommendationAgent] Filtro: ${filterPicks.length}, Semântico: ${semanticPicks.length}`
       );
 
-      let picks: any[] = [];
-
-      if (shouldUseSemantic) {
-        picks = await this.semanticSearchTool.execute(
-          query.query,
-          query.filters
-        );
-      } else {
-        picks = await this.filterSearchTool.execute(query.query, query.filters);
-      }
-
-      // Se não encontrou resultados, tenta a outra abordagem
-      if (picks.length === 0) {
-        console.log(
-          `[RecommendationAgent] Nenhum resultado, tentando abordagem alternativa`
-        );
-        picks = shouldUseSemantic
-          ? await this.filterSearchTool.execute(query.query, query.filters)
-          : await this.semanticSearchTool.execute(query.query, query.filters);
-      }
+      // Combinar resultados usando RRF (Reciprocal Rank Fusion)
+      const combinedPicks = this.combineWithRRF(filterPicks, semanticPicks);
 
       // Tentar MCP se habilitado
       let mcpPicks: any[] = [];
@@ -60,7 +52,9 @@ export class RecommendationAgent {
           query: query.query,
           context: {
             filters: query.filters,
-            approach: shouldUseSemantic ? "semantic" : "filter",
+            approach: "hybrid",
+            filterResults: filterPicks.length,
+            semanticResults: semanticPicks.length,
           },
         });
         if (mcpResponse) {
@@ -71,15 +65,15 @@ export class RecommendationAgent {
         }
       }
 
-      // Combinar resultados
-      const allPicks = [...picks, ...mcpPicks];
+      // Adicionar resultados do MCP (sem RRF, apenas append)
+      const allPicks = [...combinedPicks, ...mcpPicks];
 
-      // Remover duplicatas por ID
-      const uniquePicks = this.removeDuplicates(allPicks);
+      // Remover duplicatas por ID e limitar a 5
+      const uniquePicks = this.removeDuplicates(allPicks).slice(0, 5);
 
       const executionTime = Date.now() - startTime;
       console.log(
-        `[RecommendationAgent] Recomendação concluída em ${executionTime}ms. ${uniquePicks.length} resultados únicos`
+        `[RecommendationAgent] Recomendação híbrida concluída em ${executionTime}ms. ${uniquePicks.length} resultados finais`
       );
 
       // Guard-rail: Se não há resultados válidos, retornar picks vazios
@@ -87,16 +81,21 @@ export class RecommendationAgent {
         console.log(`[RecommendationAgent] Nenhum resultado válido encontrado`);
         return {
           picks: [],
-          notes: this.generateNotes(query.query, 0, shouldUseSemantic),
+          notes: this.generateNotes(query.query, 0, "hybrid"),
         };
       }
 
       return {
-        picks: uniquePicks.slice(0, 5), // Limitar a 5 resultados
+        picks: uniquePicks.map((pick) => ({
+          id: pick.id,
+          reason: pick.reason,
+        })),
         notes: this.generateNotes(
           query.query,
           uniquePicks.length,
-          shouldUseSemantic
+          "hybrid",
+          filterPicks.length,
+          semanticPicks.length
         ),
       };
     } catch (error) {
@@ -108,91 +107,70 @@ export class RecommendationAgent {
     }
   }
 
-  private shouldUseSemanticSearch(query: string): boolean {
-    // Keywords that indicate complex semantic needs (not just simple filters)
-    const semanticKeywords = [
-      "ideal",
-      "perfeito",
-      "adequado",
-      "moderno",
-      "elegante",
-      "resistente",
-      "lavável",
-      "antimofo",
-      "sem cheiro",
-      "durabilidade",
-      "harmonioso",
-      "combinar",
-      "estilo",
-      "ambiente",
-      "decoração",
-    ];
+  private combineWithRRF(
+    filterPicks: any[],
+    semanticPicks: any[]
+  ): RankedPick[] {
+    const k = 60; // Parâmetro RRF (padrão)
+    const combinedMap = new Map<string, RankedPick>();
 
-    // Simple color/attribute keywords that should use filter search
-    const filterKeywords = [
-      "branco",
-      "branca",
-      "white",
-      "preto",
-      "preta",
-      "black",
-      "azul",
-      "blue",
-      "vermelho",
-      "vermelha",
-      "red",
-      "verde",
-      "green",
-      "amarelo",
-      "amarela",
-      "yellow",
-      "rosa",
-      "pink",
-      "cinza",
-      "gray",
-      "grey",
-      "marrom",
-      "brown",
-      "laranja",
-      "orange",
-      "roxo",
-      "purple",
-      "bege",
-      "beige",
-    ];
+    // Processar resultados do filtro
+    filterPicks.forEach((pick, index) => {
+      const rank = index + 1;
+      const rrfScore = 1 / (rank + k);
 
-    const queryLower = query.toLowerCase();
+      combinedMap.set(pick.id, {
+        id: pick.id,
+        reason: pick.reason,
+        filterRank: rank,
+        rrfScore,
+      });
+    });
 
-    // Check if query contains specific color/attribute keywords
-    const hasFilterKeywords = filterKeywords.some((keyword) =>
-      queryLower.includes(keyword)
-    );
+    // Processar resultados semânticos e combinar
+    semanticPicks.forEach((pick, index) => {
+      const rank = index + 1;
+      const semanticRRF = 1 / (rank + k);
 
-    // Check if query contains complex semantic keywords
-    const hasSemanticKeywords = semanticKeywords.some((keyword) =>
-      queryLower.includes(keyword)
-    );
+      if (combinedMap.has(pick.id)) {
+        // Item já existe no filtro - somar scores RRF
+        const existing = combinedMap.get(pick.id)!;
+        existing.semanticRank = rank;
+        existing.rrfScore = (existing.rrfScore || 0) + semanticRRF;
 
-    // Use semantic search if:
-    // 1. Has complex semantic keywords, OR
-    // 2. Is a very long query (>4 words) without specific color/attribute keywords
-    const wordCount = query.split(" ").length;
-    const shouldUseSemantic =
-      hasSemanticKeywords || (wordCount > 4 && !hasFilterKeywords);
+        // Atualizar reason para indicar que foi encontrado em ambas as buscas
+        existing.reason = `${existing.reason} + Semântico (rank ${rank})`;
+      } else {
+        // Item só existe na busca semântica
+        combinedMap.set(pick.id, {
+          id: pick.id,
+          reason: pick.reason,
+          semanticRank: rank,
+          rrfScore: semanticRRF,
+        });
+      }
+    });
 
-    console.log(`[RecommendationAgent] Query: "${query}"`);
+    // Converter para array e ordenar por score RRF (decrescente)
+    const combinedArray = Array.from(combinedMap.values());
+    combinedArray.sort((a, b) => (b.rrfScore || 0) - (a.rrfScore || 0));
+
     console.log(
-      `[RecommendationAgent] Has filter keywords: ${hasFilterKeywords}`
-    );
-    console.log(
-      `[RecommendationAgent] Has semantic keywords: ${hasSemanticKeywords}`
-    );
-    console.log(`[RecommendationAgent] Word count: ${wordCount}`);
-    console.log(
-      `[RecommendationAgent] Using semantic search: ${shouldUseSemantic}`
+      `[RecommendationAgent] RRF combinou ${filterPicks.length} filtros + ${semanticPicks.length} semânticos = ${combinedArray.length} únicos`
     );
 
-    return shouldUseSemantic;
+    // Log dos top 3 scores para debug
+    combinedArray.slice(0, 3).forEach((pick, index) => {
+      console.log(
+        `[RecommendationAgent] Top ${index + 1}: ID ${
+          pick.id
+        }, Score ${pick.rrfScore?.toFixed(4)}, Filter: ${
+          pick.filterRank || "N/A"
+        }, Semantic: ${pick.semanticRank || "N/A"}`
+      );
+    });
+
+    return combinedArray;
   }
 
   private removeDuplicates(picks: any[]): any[] {
@@ -209,13 +187,29 @@ export class RecommendationAgent {
   private generateNotes(
     query: string,
     resultCount: number,
-    usedSemantic: boolean
+    approach: string,
+    filterCount?: number,
+    semanticCount?: number
   ): string {
     if (resultCount === 0) {
       return "Nenhuma tinta encontrada com os critérios especificados. Tente ajustar sua busca.";
     }
 
-    const approach = usedSemantic ? "busca semântica" : "filtros específicos";
-    return `Encontradas ${resultCount} tintas usando ${approach}. Para mais opções, refine sua consulta.`;
+    if (
+      approach === "hybrid" &&
+      filterCount !== undefined &&
+      semanticCount !== undefined
+    ) {
+      return `Encontradas ${resultCount} tintas usando busca híbrida (${filterCount} filtros + ${semanticCount} semânticos). Resultados ordenados por relevância combinada.`;
+    }
+
+    return `Encontradas ${resultCount} tintas. Para mais opções, refine sua consulta.`;
+  }
+
+  // Método mantido para compatibilidade, mas não usado mais
+  private shouldUseSemanticSearch(query: string): boolean {
+    // Este método não é mais usado na abordagem híbrida
+    // Mantido apenas para compatibilidade
+    return false;
   }
 }
