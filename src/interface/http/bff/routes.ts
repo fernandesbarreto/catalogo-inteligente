@@ -26,6 +26,7 @@ import { makeUsersController } from "./controllers/users.controller";
 import { makePaintsController } from "./controllers/paints.controller";
 import { makeAuthController } from "./controllers/auth.controller";
 import { makeUserRolesController } from "./controllers/user-roles.controller";
+import aiRoutes from "./routes/ai.routes";
 
 // Auth
 import { Login } from "../../../use-cases/auth/login"; // <- confira caixa/arquivo
@@ -56,6 +57,9 @@ const paintRepo = new PaintRepoPrisma(prisma);
 // AUTH
 const authCtl = makeAuthController(new Login(userRepo));
 router.post("/auth/login", authCtl.login);
+
+// AI ROUTES
+router.use("/ai", aiRoutes);
 
 router.use(requireAuth, attachRoles);
 
