@@ -27,6 +27,7 @@ import { makePaintsController } from "./controllers/paints.controller";
 import { makeAuthController } from "./controllers/auth.controller";
 import { makeUserRolesController } from "./controllers/user-roles.controller";
 import aiRoutes from "./routes/ai.routes";
+import mcpRoutes from "./routes/mcp.routes";
 
 // Auth
 import { Login } from "../../../use-cases/auth/login"; // <- confira caixa/arquivo
@@ -60,6 +61,9 @@ router.post("/auth/login", authCtl.login);
 
 // AI ROUTES
 router.use("/ai", aiRoutes);
+
+// MCP ROUTES
+router.use("/mcp", mcpRoutes);
 
 router.use(requireAuth, attachRoles);
 

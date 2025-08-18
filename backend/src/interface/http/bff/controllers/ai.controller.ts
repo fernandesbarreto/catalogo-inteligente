@@ -1,18 +1,16 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { RecommendationQuerySchema } from "../dto/ai.dto";
-import { RecommendationAgent } from "../../../../use-cases/ai/RecommendationAgent";
+import { RecommendationAgentWithMCP } from "../../../../use-cases/ai/RecommendationAgentWithMCP";
 import { FilterSearchTool } from "../../../../infra/search/FilterSearchTool";
 import { SemanticSearchTool } from "../../../../infra/search/SemanticSearchTool";
-import { MCPAdapter } from "../../../../infra/mcp/MCPAdapter";
 import { ZodError } from "zod";
 
 export class AiController {
   private readonly prisma = new PrismaClient();
   private readonly filterSearchTool = new FilterSearchTool(this.prisma);
-  private readonly mcpAdapter = new MCPAdapter();
   private semanticSearchTool: SemanticSearchTool | null = null;
-  private recommendationAgent: RecommendationAgent | null = null;
+  private recommendationAgent: RecommendationAgentWithMCP | null = null;
 
   private async getSemanticSearchTool(): Promise<SemanticSearchTool> {
     if (!this.semanticSearchTool) {
@@ -21,14 +19,10 @@ export class AiController {
     return this.semanticSearchTool;
   }
 
-  private async getRecommendationAgent(): Promise<RecommendationAgent> {
+  private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {
     if (!this.recommendationAgent) {
-      const semanticTool = await this.getSemanticSearchTool();
-      this.recommendationAgent = new RecommendationAgent(
-        this.filterSearchTool,
-        semanticTool,
-        this.mcpAdapter
-      );
+      this.recommendationAgent = new RecommendationAgentWithMCP();
+      await this.recommendationAgent.initialize();
     }
     return this.recommendationAgent;
   }
@@ -41,14 +35,29 @@ export class AiController {
       console.log(`[AiController] Recebida recomendação:`, validatedQuery);
 
       const agent = await this.getRecommendationAgent();
-      const result = await agent.execute(validatedQuery);
-
-      console.log(`[AiController] Recomendação retornada:`, {
-        picksCount: result.picks.length,
-        hasNotes: !!result.notes,
+      const result = await agent.recommend({
+        query: validatedQuery.query,
+        context: {
+          filters: validatedQuery.filters,
+        },
+        useMCP: true,
       });
 
-      res.json(result);
+      // Converter para o formato esperado pelo frontend
+      const response = {
+        picks: result.map((pick) => ({
+          id: pick.id,
+          reason: pick.reason,
+        })),
+        notes: `Encontradas ${result.length} tintas usando MCP.`,
+      };
+
+      console.log(`[AiController] Recomendação retornada:`, {
+        picksCount: response.picks.length,
+        hasNotes: !!response.notes,
+      });
+
+      res.json(response);
     } catch (error: any) {
       console.error(`[AiController] Erro na recomendação:`, error);
 
@@ -77,6 +86,55 @@ export class AiController {
       res.status(500).json({
         error: "internal_error",
         message: "Erro na busca semântica",
+      });
+    }
+  }
+
+  async recommendWithMCP(req: Request, res: Response) {
+    try {
+      // Validar entrada com Zod
+      const validatedQuery = RecommendationQuerySchema.parse(req.body);
+
+      console.log(`[AiController] Recebida recomendação MCP:`, validatedQuery);
+
+      const agent = await this.getRecommendationAgent();
+      const result = await agent.recommend({
+        query: validatedQuery.query,
+        context: {
+          filters: validatedQuery.filters,
+        },
+        useMCP: true,
+      });
+
+      // Converter para o formato esperado pelo frontend
+      const response = {
+        picks: result.map((pick) => ({
+          id: pick.id,
+          reason: pick.reason,
+        })),
+        notes: `Encontradas ${result.length} tintas usando MCP (Model Context Protocol).`,
+        mcpEnabled: true,
+      };
+
+      console.log(`[AiController] Recomendação MCP retornada:`, {
+        picksCount: response.picks.length,
+        mcpEnabled: response.mcpEnabled,
+      });
+
+      res.json(response);
+    } catch (error: any) {
+      console.error(`[AiController] Erro na recomendação MCP:`, error);
+
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          error: "validation_error",
+          details: error.errors,
+        });
+      }
+
+      res.status(500).json({
+        error: "internal_error",
+        message: "Erro interno no processamento da recomendação MCP",
       });
     }
   }
