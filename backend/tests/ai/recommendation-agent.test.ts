@@ -24,12 +24,14 @@ describe("RecommendationAgent", () => {
     jest.clearAllMocks();
   });
 
-  it("deve usar busca semântica para queries com palavras-chave", async () => {
-    const mockPicks: RecommendationPick[] = [
+  it("deve usar busca híbrida para queries com palavras-chave", async () => {
+    const mockSemanticPicks: RecommendationPick[] = [
       { id: "1", reason: "Semântico: tinta ideal para quarto infantil" },
     ];
+    const mockFilterPicks: RecommendationPick[] = [];
 
-    mockSemanticSearchTool.execute.mockResolvedValue(mockPicks);
+    mockSemanticSearchTool.execute.mockResolvedValue(mockSemanticPicks);
+    mockFilterSearchTool.execute.mockResolvedValue(mockFilterPicks);
 
     const result = await agent.execute({
       query: "tinta ideal para quarto infantil lavável",
@@ -39,17 +41,22 @@ describe("RecommendationAgent", () => {
       "tinta ideal para quarto infantil lavável",
       undefined
     );
-    expect(mockFilterSearchTool.execute).not.toHaveBeenCalled();
+    expect(mockFilterSearchTool.execute).toHaveBeenCalledWith(
+      "tinta ideal para quarto infantil lavável",
+      undefined
+    );
     expect(result.picks).toHaveLength(1);
     expect(result.picks[0].id).toBe("1");
   });
 
-  it("deve usar busca por filtros para queries simples", async () => {
-    const mockPicks: RecommendationPick[] = [
+  it("deve usar busca híbrida para queries simples", async () => {
+    const mockFilterPicks: RecommendationPick[] = [
       { id: "2", reason: "Filtro: Tinta Branca" },
     ];
+    const mockSemanticPicks: RecommendationPick[] = [];
 
-    mockFilterSearchTool.execute.mockResolvedValue(mockPicks);
+    mockFilterSearchTool.execute.mockResolvedValue(mockFilterPicks);
+    mockSemanticSearchTool.execute.mockResolvedValue(mockSemanticPicks);
 
     const result = await agent.execute({
       query: "branca",
@@ -59,7 +66,10 @@ describe("RecommendationAgent", () => {
       "branca",
       undefined
     );
-    expect(mockSemanticSearchTool.execute).not.toHaveBeenCalled();
+    expect(mockSemanticSearchTool.execute).toHaveBeenCalledWith(
+      "branca",
+      undefined
+    );
     expect(result.picks).toHaveLength(1);
   });
 
@@ -81,20 +91,29 @@ describe("RecommendationAgent", () => {
   });
 
   it("deve remover duplicatas por ID", async () => {
-    const mockPicks: RecommendationPick[] = [
+    const mockSemanticPicks: RecommendationPick[] = [
       { id: "1", reason: "Semântico: tinta 1" },
-      { id: "1", reason: "Filtro: tinta 1 duplicada" },
       { id: "2", reason: "Semântico: tinta 2" },
     ];
+    const mockFilterPicks: RecommendationPick[] = [
+      { id: "1", reason: "Filtro: tinta 1 duplicada" },
+      { id: "3", reason: "Filtro: Tinta Azul" },
+    ];
 
-    mockSemanticSearchTool.execute.mockResolvedValue(mockPicks);
+    mockSemanticSearchTool.execute.mockResolvedValue(mockSemanticPicks);
+    mockFilterSearchTool.execute.mockResolvedValue(mockFilterPicks);
 
     const result = await agent.execute({
       query: "tinta para quarto",
     });
 
-    expect(result.picks).toHaveLength(2);
-    expect(result.picks.map((p) => p.id)).toEqual(["1", "2"]);
+    expect(result.picks).toHaveLength(3);
+    // Verificar que não há duplicatas por ID
+    const uniqueIds = new Set(result.picks.map((p) => p.id));
+    expect(uniqueIds.size).toBe(3);
+    expect(uniqueIds.has("1")).toBe(true);
+    expect(uniqueIds.has("2")).toBe(true);
+    expect(uniqueIds.has("3")).toBe(true);
   });
 
   it("deve limitar resultados a 5 picks", async () => {
@@ -107,6 +126,7 @@ describe("RecommendationAgent", () => {
     );
 
     mockSemanticSearchTool.execute.mockResolvedValue(mockPicks);
+    mockFilterSearchTool.execute.mockResolvedValue([]);
 
     const result = await agent.execute({
       query: "tinta para sala",
@@ -121,6 +141,7 @@ describe("RecommendationAgent", () => {
     ];
 
     mockFilterSearchTool.execute.mockResolvedValue(mockPicks);
+    mockSemanticSearchTool.execute.mockResolvedValue([]);
 
     const result = await agent.execute({
       query: "branca",
@@ -131,6 +152,10 @@ describe("RecommendationAgent", () => {
     });
 
     expect(mockFilterSearchTool.execute).toHaveBeenCalledWith("branca", {
+      surfaceType: "parede",
+      roomType: "sala",
+    });
+    expect(mockSemanticSearchTool.execute).toHaveBeenCalledWith("branca", {
       surfaceType: "parede",
       roomType: "sala",
     });

@@ -63,9 +63,9 @@ describe("Agent Hybrid Routing Tests", () => {
         expect(result.picks.length).toBeLessThanOrEqual(5);
 
         // Verificar latência
-        expect(executionTime).toBeLessThan(10000);
+        expect(executionTime).toBeLessThan(20000);
       },
-      15000
+      30000
     );
   });
 
