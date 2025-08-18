@@ -32,7 +32,7 @@ export class SemanticSearchTool implements ISearchTool {
       );
 
       // Filtrar apenas documentos com IDs válidos e metadados completos
-      let validDocs = docs.filter((doc) => {
+      let validDocs = docs.filter((doc: any) => {
         const metadata = doc.metadata || {};
         return metadata.id && metadata.name && metadata.color;
       });
@@ -43,7 +43,7 @@ export class SemanticSearchTool implements ISearchTool {
 
       // Aplicar filtros nos metadados quando existirem
       if (filters && Object.keys(filters).length > 0) {
-        validDocs = validDocs.filter((doc) => {
+        validDocs = validDocs.filter((doc: any) => {
           const metadata = doc.metadata || {};
 
           // Verificar filtros de superfície
@@ -234,7 +234,7 @@ export class SemanticSearchTool implements ISearchTool {
         return [];
       }
 
-      return validDocs.map((doc) => {
+      return validDocs.map((doc: any) => {
         const metadata = doc.metadata || {};
         const paintInfo = [
           metadata.name,
