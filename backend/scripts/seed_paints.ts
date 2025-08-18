@@ -19,7 +19,7 @@ interface PaintData {
 
 async function generateEmbedding(text: string): Promise<number[]> {
   const embeddingProvider = EmbeddingProviderFactory.getProvider();
-  
+
   if (!embeddingProvider.isAvailable()) {
     throw new Error("Embedding provider is not available");
   }

@@ -8,11 +8,11 @@ export class EmbeddingProviderFactory {
   static getProvider(): IEmbeddingProvider {
     if (!this.instance) {
       // In test environment or when OpenAI is not available, use fake provider
-      if (process.env.NODE_ENV === 'test' || !process.env.OPENAI_API_KEY) {
-        console.log('[EmbeddingProviderFactory] Using FakeEmbeddingProvider');
+      if (process.env.NODE_ENV === "test" || !process.env.OPENAI_API_KEY) {
+        console.log("[EmbeddingProviderFactory] Using FakeEmbeddingProvider");
         this.instance = new FakeEmbeddingProvider();
       } else {
-        console.log('[EmbeddingProviderFactory] Using OpenAIEmbeddingProvider');
+        console.log("[EmbeddingProviderFactory] Using OpenAIEmbeddingProvider");
         this.instance = new OpenAIEmbeddingProvider();
       }
     }
