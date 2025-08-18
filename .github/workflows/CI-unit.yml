@@ -19,6 +19,9 @@ jobs:
           node-version: 20
           cache: "npm"
 
+      - name: Change to backend directory
+        run: cd backend
+
       - name: Install deps
         run: npm ci || npm i --no-audit --no-fund
 
