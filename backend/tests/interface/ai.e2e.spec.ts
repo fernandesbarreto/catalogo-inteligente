@@ -8,7 +8,7 @@ describe("AI Recommendations E2E Tests", () => {
     app = makeApp();
   });
 
-  describe("POST /ai/recommendations", () => {
+  describe("POST /bff/ai/recommendations", () => {
     const validQueries = [
       "tinta branca para sala",
       "tinta resistente para cozinha",
@@ -21,7 +21,7 @@ describe("AI Recommendations E2E Tests", () => {
         const startTime = Date.now();
 
         const response = await request(app)
-          .post("/ai/recommendations")
+          .post("/bff/ai/recommendations")
           .send({ query })
           .expect(200);
 
@@ -65,7 +65,7 @@ describe("AI Recommendations E2E Tests", () => {
       const startTime = Date.now();
 
       const response = await request(app)
-        .post("/ai/recommendations")
+        .post("/bff/ai/recommendations")
         .send({ query: "" })
         .expect(400);
 
@@ -87,7 +87,7 @@ describe("AI Recommendations E2E Tests", () => {
       const startTime = Date.now();
 
       const response = await request(app)
-        .post("/ai/recommendations")
+        .post("/bff/ai/recommendations")
         .send({ query: "pizza saborosa italiana" })
         .expect(200);
 
@@ -118,7 +118,7 @@ describe("AI Recommendations E2E Tests", () => {
       const startTime = Date.now();
 
       const response = await request(app)
-        .post("/ai/recommendations")
+        .post("/bff/ai/recommendations")
         .send({})
         .expect(400);
 
@@ -140,7 +140,7 @@ describe("AI Recommendations E2E Tests", () => {
       const startTime = Date.now();
 
       const response = await request(app)
-        .post("/ai/recommendations")
+        .post("/bff/ai/recommendations")
         .send("invalid json")
         .set("Content-Type", "application/json")
         .expect(400);
