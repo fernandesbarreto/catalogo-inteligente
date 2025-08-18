@@ -20,6 +20,7 @@ export class FilterSearchTool implements ISearchTool {
 
     const where: any = {};
 
+    // Aplicar filtros específicos no SQL quando existirem
     if (filters?.surfaceType) {
       where.surfaceType = {
         contains: filters.surfaceType,
@@ -27,22 +28,89 @@ export class FilterSearchTool implements ISearchTool {
       };
     }
     if (filters?.roomType) {
-      where.roomType = { contains: filters.roomType, mode: "insensitive" };
+      where.roomType = {
+        contains: filters.roomType,
+        mode: "insensitive",
+      };
     }
     if (filters?.finish) {
-      where.finish = { contains: filters.finish, mode: "insensitive" };
+      where.finish = {
+        contains: filters.finish,
+        mode: "insensitive",
+      };
     }
     if (filters?.line) {
-      where.line = { contains: filters.line, mode: "insensitive" };
+      where.line = {
+        contains: filters.line,
+        mode: "insensitive",
+      };
     }
 
     // Busca por texto nos campos relevantes
     if (query.trim()) {
-      where.OR = [
-        { name: { contains: query, mode: "insensitive" } },
-        { color: { contains: query, mode: "insensitive" } },
-        { features: { contains: query, mode: "insensitive" } },
-      ];
+      const queryLower = query.toLowerCase();
+
+      // Mapeamento de cores para incluir variações e sinônimos
+      const colorMappings: { [key: string]: string[] } = {
+        branco: ["branco", "white"],
+        branca: ["branca", "white", "branco"], // Include masculine form
+        white: ["white", "branco", "branca"],
+        preto: ["preto", "black"],
+        preta: ["preta", "black"],
+        black: ["black", "preto", "preta"],
+        azul: ["azul", "blue", "anil", "ciano"],
+        blue: ["blue", "azul", "anil", "ciano"],
+        vermelho: ["vermelho", "red", "vermelha"],
+        red: ["red", "vermelho", "vermelha"],
+        verde: ["verde", "green", "esmeralda", "jade"],
+        green: ["green", "verde", "esmeralda", "jade"],
+        amarelo: ["amarelo", "yellow", "amarela"],
+        yellow: ["yellow", "amarelo", "amarela"],
+        rosa: ["rosa", "pink"],
+        pink: ["pink", "rosa"],
+        cinza: ["cinza", "gray", "grey"],
+        gray: ["gray", "cinza"],
+        grey: ["grey", "cinza"],
+        marrom: ["marrom", "brown", "bronze"],
+        brown: ["brown", "marrom", "bronze"],
+        laranja: ["laranja", "orange", "âmbar"],
+        orange: ["orange", "laranja", "âmbar"],
+        roxo: ["roxo", "purple", "violeta"],
+        purple: ["purple", "roxo", "violeta"],
+        bege: ["bege", "beige"],
+        beige: ["beige", "bege"],
+      };
+
+      // Encontrar mapeamento de cores para a query
+      let colorVariations: string[] = [];
+      for (const [colorKey, variations] of Object.entries(colorMappings)) {
+        if (queryLower.includes(colorKey)) {
+          colorVariations = variations;
+          break;
+        }
+      }
+
+      // Se encontramos variações de cor, priorizar busca por cor
+      if (colorVariations.length > 0) {
+        where.OR = colorVariations.map((color) => ({
+          color: {
+            contains: color,
+            mode: "insensitive",
+          },
+        }));
+      } else {
+        // Busca direta por cor se não houver mapeamento
+        where.OR = [
+          { color: { contains: query, mode: "insensitive" } },
+          { name: { contains: query, mode: "insensitive" } },
+          { features: { contains: query, mode: "insensitive" } },
+        ];
+      }
+    }
+
+    // Se não há query mas há filtros, buscar apenas por filtros
+    if (!query.trim() && filters && Object.keys(filters).length > 0) {
+      console.log(`[FilterSearchTool] Buscando apenas por filtros:`, filters);
     }
 
     const paints = await this.prisma.paint.findMany({
