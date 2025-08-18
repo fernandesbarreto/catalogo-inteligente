@@ -499,7 +499,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"name\": \"Snow White\", \"color\": \"#FFFFFF\", \"surfaceType\": \"indoor\", \"roomType\": \"bedroom\", \"finish\": \"matte\", \"features\": \"washable, anti-mold\", \"line\": \"Silk Touch\"}"
+              "raw": "{\"name\": \"Snow White\", \"color\": \"White\", \"colorHex\": \"#FFFFFF\", \"surfaceType\": \"indoor\", \"roomType\": \"bedroom\", \"finish\": \"matte\", \"features\": \"washable, anti-mold\", \"line\": \"Silk Touch\"}"
             },
             "url": {
               "raw": "{{baseUrl}}/paints",
