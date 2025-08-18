@@ -291,8 +291,8 @@ const options: swaggerJsdoc.Options = {
     ],
   },
   apis: [
-    "src/interface/http/bff/controllers/*.ts",
-    "src/interface/http/bff/dto/*.ts",
+    "./src/interface/http/bff/controllers/*.ts",
+    "./src/interface/http/bff/dto/*.ts",
   ],
 };
 
