@@ -14,6 +14,7 @@ interface RecommendationResponse {
 function App() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [useMCP, setUseMCP] = useState(false);
   const [recommendations, setRecommendations] =
     useState<RecommendationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,16 +28,17 @@ function App() {
     setRecommendations(null);
 
     try {
-      const response = await fetch(
-        "http://localhost:3000/bff/ai/recommendations",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ query: query.trim() }),
-        }
-      );
+      const endpoint = useMCP
+        ? "http://localhost:3000/bff/ai/recommendations/mcp"
+        : "http://localhost:3000/bff/ai/recommendations";
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: query.trim() }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -84,6 +86,28 @@ function App() {
             >
               {loading ? "🔍 Buscando..." : "🔍 Buscar"}
             </button>
+          </div>
+
+          <div className="mcp-toggle">
+            <label className="mcp-label">
+              <input
+                type="checkbox"
+                checked={useMCP}
+                onChange={(e) => setUseMCP(e.target.checked)}
+                disabled={loading}
+              />
+              <span className="mcp-text">
+                🚀 Usar MCP (Model Context Protocol)
+              </span>
+            </label>
+            {useMCP && (
+              <div className="mcp-info">
+                <small>
+                  MCP oferece ferramentas padronizadas e isolamento de
+                  credenciais
+                </small>
+              </div>
+            )}
           </div>
         </form>
 
