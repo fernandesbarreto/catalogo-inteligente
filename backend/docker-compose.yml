@@ -16,28 +16,6 @@ services:
       timeout: 5s
       retries: 15
 
-  # --- Produção-like (usa dist/) ---
-  api:
-    build: .
-    container_name: paints-api
-    environment:
-      PORT: 3000
-      NODE_ENV: production
-      DATABASE_URL: postgres://app:app@db:5432/appdb
-      JWT_SECRET: change-me
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    command: >
-      sh -c "
-        npx prisma generate &&
-        npx prisma migrate deploy &&
-        node dist/server.js
-      "
-    ports:
-      - "3000:3000"
-    depends_on:
-      db:
-        condition: service_healthy
-
   # --- Desenvolvimento (hot reload; monta o código local) ---
   api-dev:
     image: node:20-slim

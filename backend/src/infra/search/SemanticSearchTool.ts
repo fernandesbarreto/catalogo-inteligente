@@ -17,15 +17,22 @@ export class SemanticSearchTool implements ISearchTool {
     });
 
     try {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Semantic search timeout")), 5000); // 5 second timeout
+      });
+
       const retriever = await makeRetriever(8);
-      const docs = await retriever.getRelevantDocuments(query);
+      const searchPromise = retriever.getRelevantDocuments(query);
+
+      const docs = (await Promise.race([searchPromise, timeoutPromise])) as any;
 
       console.log(
         `[SemanticSearchTool] Encontrados ${docs.length} resultados semânticos`
       );
 
       // Filtrar apenas documentos com IDs válidos e metadados completos
-      let validDocs = docs.filter((doc) => {
+      let validDocs = docs.filter((doc: any) => {
         const metadata = doc.metadata || {};
         return metadata.id && metadata.name && metadata.color;
       });
@@ -36,7 +43,7 @@ export class SemanticSearchTool implements ISearchTool {
 
       // Aplicar filtros nos metadados quando existirem
       if (filters && Object.keys(filters).length > 0) {
-        validDocs = validDocs.filter((doc) => {
+        validDocs = validDocs.filter((doc: any) => {
           const metadata = doc.metadata || {};
 
           // Verificar filtros de superfície
@@ -92,6 +99,19 @@ export class SemanticSearchTool implements ISearchTool {
         "pintura",
         "cor",
         "color",
+        "decorar",
+        "decoração",
+        "decoration",
+        "ambiente",
+        "room",
+        "cômodo",
+        "espaço",
+        "space",
+        "infantil",
+        "criança",
+        "child",
+        "children",
+        "kids",
         "branco",
         "branca",
         "white",
@@ -133,6 +153,72 @@ export class SemanticSearchTool implements ISearchTool {
         "lavável",
         "antimofo",
         "resistente",
+        "jade",
+        "dourado",
+        "gold",
+        "pêssego",
+        "peach",
+        "oliva",
+        "olive",
+        "coral",
+        "lima",
+        "lime",
+        "esmeralda",
+        "emerald",
+        "terracota",
+        "turquesa",
+        "turquoise",
+        "ânbar",
+        "amber",
+        "anil",
+        "indigo",
+        "vinho",
+        "wine",
+        "mostarda",
+        "mustard",
+        "cobre",
+        "copper",
+        "bronze",
+        "violeta",
+        "violet",
+        "fúcsia",
+        "fuchsia",
+        "aqua",
+        "cian",
+        "cyan",
+        "ameixa",
+        "plum",
+        "turmalina",
+        "tourmaline",
+        "salmão",
+        "salmon",
+        "grafite",
+        "graphite",
+        "índigo",
+        "pastel",
+        "natural",
+        "vibrante",
+        "vibrant",
+        "suave",
+        "soft",
+        "claro",
+        "light",
+        "escuro",
+        "dark",
+        "profundo",
+        "deep",
+        "sereno",
+        "serene",
+        "quente",
+        "warm",
+        "frio",
+        "cold",
+        "intenso",
+        "intense",
+        "neutro",
+        "neutral",
+        "puro",
+        "pure",
       ];
 
       const queryLower = query.toLowerCase();
@@ -148,7 +234,7 @@ export class SemanticSearchTool implements ISearchTool {
         return [];
       }
 
-      return validDocs.map((doc) => {
+      return validDocs.map((doc: any) => {
         const metadata = doc.metadata || {};
         const paintInfo = [
           metadata.name,
@@ -169,6 +255,17 @@ export class SemanticSearchTool implements ISearchTool {
       });
     } catch (error) {
       console.error(`[SemanticSearchTool] Erro na busca semântica:`, error);
+
+      // If it's a timeout, log it specifically
+      if (
+        error instanceof Error &&
+        error.message === "Semantic search timeout"
+      ) {
+        console.log(
+          `[SemanticSearchTool] Timeout - retornando resultados vazios`
+        );
+      }
+
       return [];
     }
   }
