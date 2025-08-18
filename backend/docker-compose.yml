@@ -1,0 +1,69 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: paints-db
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # --- Produção-like (usa dist/) ---
+  api:
+    build: .
+    container_name: paints-api
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATABASE_URL: postgres://app:app@db:5432/appdb
+      JWT_SECRET: change-me
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        node dist/server.js
+      "
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # --- Desenvolvimento (hot reload; monta o código local) ---
+  api-dev:
+    image: node:20-slim
+    container_name: paints-api-dev
+    working_dir: /app
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      DATABASE_URL: postgres://app:app@db:5432/appdb
+      JWT_SECRET: change-me
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - .:/app
+      - /app/node_modules # evita conflitar com node_modules do host
+    command: >
+      sh -c "
+        npm ci &&
+        npx prisma generate &&
+        npx prisma migrate dev --name init || true &&
+        npx ts-node-dev --respawn --transpile-only src/server.ts
+      "
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dbdata:

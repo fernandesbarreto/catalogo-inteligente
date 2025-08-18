@@ -1,0 +1,243 @@
+{
+  "info": {
+    "name": "Catalogo Inteligente - AI Endpoints",
+    "_postman_id": "ai-endpoints-collection-123",
+    "description": "AI endpoints for paint recommendations and semantic search. No authentication required.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Semantic Search",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"tinta para quarto infantil lavável\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "search"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Returns array of results', () => Array.isArray(json));",
+              "pm.test('Results have id and content', () => {",
+              "  if (json.length > 0) {",
+              "    pm.expect(json[0]).to.have.property('id');",
+              "    pm.expect(json[0]).to.have.property('content');",
+              "  }",
+              "});",
+              "console.log('Found', json.length, 'paints matching query');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Paint Recommendations",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"tinta para sala de estar moderna\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/recommendations",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "recommendations"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has picks and notes', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('notes');",
+              "});",
+              "pm.test('Picks is array', () => Array.isArray(json.picks));",
+              "console.log('AI recommended', json.picks.length, 'paints');",
+              "console.log('Notes:', json.notes);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search for External Paint",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"tinta para área externa resistente ao clima\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "search"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Returns search results', () => Array.isArray(json));",
+              "console.log('Found', json.length, 'external paints');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Bathroom Paint Recommendations",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"tinta para banheiro antimofo\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/recommendations",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "recommendations"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has recommendations', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('notes');",
+              "});",
+              "console.log('AI recommended', json.picks.length, 'bathroom paints');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search for Kitchen Paint",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"tinta para cozinha resistente a gordura\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "search"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Returns search results', () => Array.isArray(json));",
+              "console.log('Found', json.length, 'kitchen paints');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Modern Living Room Recommendations",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"tinta moderna para sala de estar elegante\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/recommendations",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "recommendations"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has recommendations', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('notes');",
+              "});",
+              "console.log('AI recommended', json.picks.length, 'modern living room paints');"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/bff"
+    }
+  ]
+}
