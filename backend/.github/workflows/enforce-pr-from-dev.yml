@@ -1,0 +1,22 @@
+name: Enforce main PR source
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    env:
+      BASE_REF: ${{ github.base_ref }}
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - name: Fail if PR is not from develop
+        shell: bash
+        run: |
+          echo "Base: ${BASE_REF} | Head: ${HEAD_REF}"
+          if [ "${BASE_REF}" = "main" ] && [ "${HEAD_REF}" != "develop" ]; then
+            echo "❌ PR to main must come from 'develop' (got '${HEAD_REF}')."
+            exit 1
+          fi
+          echo "✅ Allowed: PR to main from develop."
