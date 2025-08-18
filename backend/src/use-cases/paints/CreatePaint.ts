@@ -58,12 +58,6 @@ export class CreatePaint {
     if (!input.roomType?.trim()) throw new Error("roomType is required");
     if (!input.finish?.trim()) throw new Error("finish is required");
 
-    // In test environment, allow creating paints without embeddings
-    if (process.env.NODE_ENV === "test" || process.env.NODE_ENV == null) {
-      // Create paint without embedding for test environment
-      return this.paints.create(input);
-    }
-
     // Check if embedding provider is available
     if (!this.embeddingProvider.isAvailable()) {
       throw new Error(
