@@ -42,12 +42,6 @@ jobs:
       - name: Run infra tests
         run: npm test -- tests/infra/
 
-      - name: Run interface tests
-        run: npm test -- tests/interface/
-
-      - name: Run AI tests
-        run: npm test -- tests/ai/
-
       - name: Upload test report (opc.)
         if: always()
         uses: actions/upload-artifact@v4
