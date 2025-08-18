@@ -49,6 +49,9 @@ export class FilterSearchTool implements ISearchTool {
     // Busca por texto nos campos relevantes
     if (query.trim()) {
       const queryLower = query.toLowerCase();
+      const queryWords = queryLower
+        .split(/\s+/)
+        .filter((word) => word.length > 0);
 
       // Mapeamento de cores para incluir variações e sinônimos
       const colorMappings: { [key: string]: string[] } = {
@@ -90,22 +93,44 @@ export class FilterSearchTool implements ISearchTool {
         }
       }
 
-      // Se encontramos variações de cor, priorizar busca por cor
+      // Construir condições de busca mais abrangentes
+      const searchConditions = [];
+
+      // Se encontramos variações de cor, adicionar busca por cor
       if (colorVariations.length > 0) {
-        where.OR = colorVariations.map((color) => ({
-          color: {
-            contains: color,
-            mode: "insensitive",
-          },
-        }));
-      } else {
-        // Busca direta por cor se não houver mapeamento
-        where.OR = [
-          { color: { contains: query, mode: "insensitive" } },
-          { name: { contains: query, mode: "insensitive" } },
-          { features: { contains: query, mode: "insensitive" } },
-        ];
+        searchConditions.push(
+          ...colorVariations.map((color) => ({
+            color: {
+              contains: color,
+              mode: "insensitive",
+            },
+          }))
+        );
       }
+
+      // Buscar por cada palavra individualmente em todos os campos relevantes
+      for (const word of queryWords) {
+        searchConditions.push(
+          { name: { contains: word, mode: "insensitive" } },
+          { features: { contains: word, mode: "insensitive" } },
+          { roomType: { contains: word, mode: "insensitive" } },
+          { surfaceType: { contains: word, mode: "insensitive" } },
+          { finish: { contains: word, mode: "insensitive" } },
+          { line: { contains: word, mode: "insensitive" } }
+        );
+      }
+
+      // Se não há variações de cor específicas, também buscar por cor direta
+      if (colorVariations.length === 0) {
+        for (const word of queryWords) {
+          searchConditions.push({
+            color: { contains: word, mode: "insensitive" },
+          });
+        }
+      }
+
+      // Usar OR para combinar todas as condições
+      where.OR = searchConditions;
     }
 
     // Se não há query mas há filtros, buscar apenas por filtros
