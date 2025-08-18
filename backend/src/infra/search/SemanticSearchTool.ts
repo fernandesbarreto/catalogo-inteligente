@@ -17,8 +17,15 @@ export class SemanticSearchTool implements ISearchTool {
     });
 
     try {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Semantic search timeout")), 5000); // 5 second timeout
+      });
+
       const retriever = await makeRetriever(8);
-      const docs = await retriever.getRelevantDocuments(query);
+      const searchPromise = retriever.getRelevantDocuments(query);
+
+      const docs = (await Promise.race([searchPromise, timeoutPromise])) as any;
 
       console.log(
         `[SemanticSearchTool] Encontrados ${docs.length} resultados semânticos`
@@ -169,6 +176,17 @@ export class SemanticSearchTool implements ISearchTool {
       });
     } catch (error) {
       console.error(`[SemanticSearchTool] Erro na busca semântica:`, error);
+
+      // If it's a timeout, log it specifically
+      if (
+        error instanceof Error &&
+        error.message === "Semantic search timeout"
+      ) {
+        console.log(
+          `[SemanticSearchTool] Timeout - retornando resultados vazios`
+        );
+      }
+
       return [];
     }
   }
