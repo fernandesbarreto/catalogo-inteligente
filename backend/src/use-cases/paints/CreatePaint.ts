@@ -1,29 +1,19 @@
 import { IPaintRepo } from "../../domain/repositories/IPaintRepo";
-import OpenAI from "openai";
+import { IEmbeddingProvider } from "../../domain/repositories/IEmbeddingProvider";
+import { EmbeddingProviderFactory } from "../../infra/ai/embeddings/EmbeddingProviderFactory";
 
 export class CreatePaint {
-  private openai: OpenAI;
+  private embeddingProvider: IEmbeddingProvider;
 
-  constructor(private paints: IPaintRepo, openaiClient?: OpenAI) {
-    this.openai =
-      openaiClient ||
-      new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
+  constructor(
+    private paints: IPaintRepo, 
+    embeddingProvider?: IEmbeddingProvider
+  ) {
+    this.embeddingProvider = embeddingProvider || EmbeddingProviderFactory.getProvider();
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
-    try {
-      const response = await this.openai.embeddings.create({
-        model: "text-embedding-3-small",
-        input: text,
-      });
-
-      return response.data[0].embedding;
-    } catch (error) {
-      console.error("Error generating embedding:", error);
-      throw new Error("Failed to generate embedding for paint");
-    }
+    return this.embeddingProvider.generateEmbedding(text);
   }
 
   private createPaintText(paint: {
@@ -67,10 +57,10 @@ export class CreatePaint {
     if (!input.roomType?.trim()) throw new Error("roomType is required");
     if (!input.finish?.trim()) throw new Error("finish is required");
 
-    // Check if OpenAI API key is available
-    if (!process.env.OPENAI_API_KEY) {
+    // Check if embedding provider is available
+    if (!this.embeddingProvider.isAvailable()) {
       throw new Error(
-        "OPENAI_API_KEY environment variable is required for embedding generation"
+        "Embedding provider is not available for embedding generation"
       );
     }
 

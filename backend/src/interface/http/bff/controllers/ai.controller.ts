@@ -10,13 +10,28 @@ import { ZodError } from "zod";
 export class AiController {
   private readonly prisma = new PrismaClient();
   private readonly filterSearchTool = new FilterSearchTool(this.prisma);
-  private readonly semanticSearchTool = new SemanticSearchTool();
   private readonly mcpAdapter = new MCPAdapter();
-  private readonly recommendationAgent = new RecommendationAgent(
-    this.filterSearchTool,
-    this.semanticSearchTool,
-    this.mcpAdapter
-  );
+  private semanticSearchTool: SemanticSearchTool | null = null;
+  private recommendationAgent: RecommendationAgent | null = null;
+
+  private async getSemanticSearchTool(): Promise<SemanticSearchTool> {
+    if (!this.semanticSearchTool) {
+      this.semanticSearchTool = new SemanticSearchTool();
+    }
+    return this.semanticSearchTool;
+  }
+
+  private async getRecommendationAgent(): Promise<RecommendationAgent> {
+    if (!this.recommendationAgent) {
+      const semanticTool = await this.getSemanticSearchTool();
+      this.recommendationAgent = new RecommendationAgent(
+        this.filterSearchTool,
+        semanticTool,
+        this.mcpAdapter
+      );
+    }
+    return this.recommendationAgent;
+  }
 
   async recommend(req: Request, res: Response) {
     try {
@@ -25,7 +40,8 @@ export class AiController {
 
       console.log(`[AiController] Recebida recomendação:`, validatedQuery);
 
-      const result = await this.recommendationAgent.execute(validatedQuery);
+      const agent = await this.getRecommendationAgent();
+      const result = await agent.execute(validatedQuery);
 
       console.log(`[AiController] Recomendação retornada:`, {
         picksCount: result.picks.length,
@@ -53,7 +69,8 @@ export class AiController {
   async semanticSearch(req: Request, res: Response) {
     try {
       const { query } = req.body;
-      const result = await this.semanticSearchTool.execute(query);
+      const semanticTool = await this.getSemanticSearchTool();
+      const result = await semanticTool.execute(query);
       res.json(result);
     } catch (error: any) {
       console.error(`[AiController] Erro na busca semântica:`, error);

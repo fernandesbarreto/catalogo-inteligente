@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { makePgVectorStore } from "../src/infra/ai/langchain/vectorstore/PgvectorStore";
+import { makeLazyPgVectorStore } from "../src/infra/ai/langchain/vectorstore/LazyPgvectorStore";
 
 async function migrateToVectorStore() {
   const prisma = new PrismaClient();
@@ -24,7 +24,7 @@ async function migrateToVectorStore() {
     }
 
     // Initialize vector store
-    const vectorStore = await makePgVectorStore();
+    const vectorStore = await makeLazyPgVectorStore();
 
     // Prepare documents for vector store
     const documents = paints.map((paint) => {

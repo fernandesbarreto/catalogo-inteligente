@@ -1,15 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import * as fs from "fs";
 import * as path from "path";
-import OpenAI from "openai";
 import crypto from "crypto";
+import { EmbeddingProviderFactory } from "../src/infra/ai/embeddings/EmbeddingProviderFactory";
 
 const prisma = new PrismaClient();
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 interface PaintData {
   name: string;
@@ -23,13 +18,14 @@ interface PaintData {
 }
 
 async function generateEmbedding(text: string): Promise<number[]> {
-  try {
-    const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-    });
+  const embeddingProvider = EmbeddingProviderFactory.getProvider();
+  
+  if (!embeddingProvider.isAvailable()) {
+    throw new Error("Embedding provider is not available");
+  }
 
-    return response.data[0].embedding;
+  try {
+    return await embeddingProvider.generateEmbedding(text);
   } catch (error) {
     console.error("Error generating embedding:", error);
     throw error;
@@ -84,9 +80,10 @@ async function seedPaints() {
   try {
     console.log("🌱 Starting paint seeding...");
 
-    // Check if OpenAI API key is available
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY environment variable is required");
+    // Check if embedding provider is available
+    const embeddingProvider = EmbeddingProviderFactory.getProvider();
+    if (!embeddingProvider.isAvailable()) {
+      throw new Error("Embedding provider is not available");
     }
 
     // Parse CSV file

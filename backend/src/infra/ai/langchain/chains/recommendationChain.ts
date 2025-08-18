@@ -6,12 +6,12 @@ import {
   SystemMessage,
 } from "@langchain/core/messages";
 import { makeRetriever } from "../retrieverFactory";
-import { makeChat } from "../../llm/OpenAIChat";
+import { makeLazyChat } from "../../llm/LazyOpenAIChat";
 import { SYSTEM, USER_TEMPLATE } from "../prompts/recommendationPrompt";
 
 export async function makeRecommendationChain() {
   const retriever = await makeRetriever();
-  const llm = makeChat();
+  const llm = makeLazyChat();
 
   // LCEL: recupera → monta prompt → LLM → texto
   const chain = RunnableSequence.from([

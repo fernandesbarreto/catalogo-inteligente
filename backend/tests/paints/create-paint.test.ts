@@ -1,13 +1,11 @@
 import { CreatePaint } from "../../src/use-cases/paints/CreatePaint";
 import { makeRepo } from "./_mocks";
+import { IEmbeddingProvider } from "../../src/domain/repositories/IEmbeddingProvider";
 
 describe("CreatePaint", () => {
-  const mockOpenAI = {
-    embeddings: {
-      create: jest.fn().mockResolvedValue({
-        data: [{ embedding: new Array(1536).fill(0.1) }],
-      }),
-    },
+  const mockEmbeddingProvider: IEmbeddingProvider = {
+    generateEmbedding: jest.fn().mockResolvedValue(new Array(1536).fill(0.1)),
+    isAvailable: jest.fn().mockReturnValue(true),
   };
 
   beforeEach(() => {
@@ -33,7 +31,7 @@ describe("CreatePaint", () => {
       line: "Silk Touch",
     });
 
-    const uc = new CreatePaint(repo as any, mockOpenAI as any);
+    const uc = new CreatePaint(repo as any, mockEmbeddingProvider);
     const out = await uc.exec({
       name: "Snow White",
       color: "White",
@@ -63,7 +61,7 @@ describe("CreatePaint", () => {
 
   it("falha se faltar campos obrigatórios", async () => {
     const repo = makeRepo();
-    const uc = new CreatePaint(repo as any, mockOpenAI as any);
+    const uc = new CreatePaint(repo as any, mockEmbeddingProvider);
 
     await expect(
       uc.exec({
@@ -77,10 +75,14 @@ describe("CreatePaint", () => {
     ).rejects.toThrow();
   });
 
-  it("falha se não tiver OpenAI API key", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("falha se embedding provider não estiver disponível", async () => {
+    const unavailableProvider: IEmbeddingProvider = {
+      generateEmbedding: jest.fn(),
+      isAvailable: jest.fn().mockReturnValue(false),
+    };
+    
     const repo = makeRepo();
-    const uc = new CreatePaint(repo as any, mockOpenAI as any);
+    const uc = new CreatePaint(repo as any, unavailableProvider);
 
     await expect(
       uc.exec({
@@ -91,6 +93,6 @@ describe("CreatePaint", () => {
         roomType: "bedroom",
         finish: "matte",
       })
-    ).rejects.toThrow("OPENAI_API_KEY environment variable is required");
+    ).rejects.toThrow("Embedding provider is not available for embedding generation");
   });
 });
