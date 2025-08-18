@@ -24,7 +24,8 @@ function App() {
     {
       id: "1",
       type: "bot",
-      content: "Olá! Sou seu assistente de tintas. Como posso ajudá-lo a encontrar a tinta perfeita?",
+      content:
+        "Olá! Sou seu assistente de tintas. Como posso ajudá-lo a encontrar a tinta perfeita?",
       timestamp: new Date(),
     },
   ]);
@@ -48,39 +49,54 @@ function App() {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:3000/bff/ai/recommendations/mcp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query: inputValue.trim() }),
-      });
+      const response = await fetch(
+        "http://localhost:3000/bff/ai/recommendations/mcp",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query: inputValue.trim() }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data: RecommendationResponse = await response.json();
-      
-      // Create bot response
-      let botContent = "";
-      
-      if (data.picks && data.picks.length > 0) {
-        botContent = `Encontrei ${data.picks.length} tinta(s) que podem atender sua necessidade:\n\n`;
-        data.picks.forEach((pick, index) => {
-          botContent += `${index + 1}. **${pick.id}** - ${pick.reason}\n`;
-        });
-        
-        if (data.notes) {
-          botContent += `\n${data.notes}`;
+      const data: any = await response.json();
+
+      // Preferir mensagem natural gerada no BFF quando disponível
+      let botContent = data.message as string;
+
+      if (!botContent) {
+        if (data.picks && data.picks.length > 0) {
+          const top = data.picks.slice(0, Math.min(3, data.picks.length));
+          const bullets = top
+            .map(
+              (p: any) =>
+                `• ${p.reason
+                  .replace(/^Filtro:\\s*/i, "")
+                  .replace(/^Semântico:\\s*/i, "")
+                  .replace(/\\.\\.\\.$/, "")}`
+            )
+            .join("\n");
+          const tail =
+            data.picks.length > top.length
+              ? `\n\nPosso mostrar mais opções se quiser (tenho mais ${
+                  data.picks.length - top.length
+                }).`
+              : "";
+          botContent = `Aqui estão algumas opções que se encaixam bem:\n\n${bullets}${tail}`;
+        } else {
+          botContent =
+            "Desculpe, não encontrei tintas que correspondam exatamente ao que você procura. Pode tentar reformular sua busca ou me dar mais detalhes sobre o que precisa?";
         }
-      } else {
-        botContent = "Desculpe, não encontrei tintas que correspondam exatamente ao que você procura. Pode tentar reformular sua busca ou me dar mais detalhes sobre o que precisa?";
       }
 
       const botMessage: Message = {
@@ -90,15 +106,16 @@ function App() {
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, botMessage]);
+      setMessages((prev) => [...prev, botMessage]);
     } catch (err) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "bot",
-        content: "Desculpe, tive um problema ao processar sua solicitação. Pode tentar novamente?",
+        content:
+          "Desculpe, tive um problema ao processar sua solicitação. Pode tentar novamente?",
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setLoading(false);
     }
@@ -125,7 +142,9 @@ function App() {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`message ${message.type === "user" ? "user" : "bot"}`}
+                className={`message ${
+                  message.type === "user" ? "user" : "bot"
+                }`}
               >
                 <div className="message-content">
                   {message.type === "bot" ? (

@@ -44,13 +44,15 @@ export class AiController {
       });
 
       // Converter para o formato esperado pelo frontend
+      const picks = result.map((pick) => ({
+        id: pick.id,
+        reason: pick.reason,
+      }));
       const response = {
-        picks: result.map((pick) => ({
-          id: pick.id,
-          reason: pick.reason,
-        })),
+        picks,
         notes: `Encontradas ${result.length} tintas usando MCP.`,
-      };
+        message: this.formatPicksAsNaturalMessage(validatedQuery.query, picks),
+      } as any;
 
       console.log(`[AiController] Recomendação retornada:`, {
         picksCount: response.picks.length,
@@ -107,14 +109,16 @@ export class AiController {
       });
 
       // Converter para o formato esperado pelo frontend
+      const picks = result.map((pick) => ({
+        id: pick.id,
+        reason: pick.reason,
+      }));
       const response = {
-        picks: result.map((pick) => ({
-          id: pick.id,
-          reason: pick.reason,
-        })),
+        picks,
         notes: `Encontradas ${result.length} tintas usando MCP (Model Context Protocol).`,
         mcpEnabled: true,
-      };
+        message: this.formatPicksAsNaturalMessage(validatedQuery.query, picks),
+      } as any;
 
       console.log(`[AiController] Recomendação MCP retornada:`, {
         picksCount: response.picks.length,
@@ -139,3 +143,52 @@ export class AiController {
     }
   }
 }
+
+// ===== Helpers (fora da classe para manter o arquivo simples) =====
+export interface SimplePick {
+  id: string;
+  reason: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace AiControllerHelpers {
+  export function normalizeReason(reason: string): string {
+    let r = reason.trim();
+    // Remove prefixos técnicos
+    r = r.replace(/^Filtro:\s*/i, "").replace(/^Semântico:\s*/i, "");
+    // Remove reticências no fim
+    r = r.replace(/\.\.\.$/, "");
+    return r;
+  }
+}
+
+// Extensão da classe para manter métodos puros
+declare module "./ai.controller" {
+  interface AiController {
+    formatPicksAsNaturalMessage(query: string, picks: SimplePick[]): string;
+  }
+}
+
+AiController.prototype.formatPicksAsNaturalMessage = function (
+  this: AiController,
+  query: string,
+  picks: SimplePick[]
+): string {
+  if (!picks || picks.length === 0) {
+    return "Não encontrei opções exatas para sua necessidade. Pode me dar mais detalhes (ambiente, acabamento, cor desejada)?";
+  }
+
+  const top = picks.slice(0, Math.min(3, picks.length));
+  const bullets = top
+    .map((p) => `• ${AiControllerHelpers.normalizeReason(p.reason)}`)
+    .join("\n");
+
+  const tail =
+    picks.length > top.length
+      ? `\n\nPosso mostrar mais opções se quiser (tenho mais ${
+          picks.length - top.length
+        }).`
+      : "";
+
+  return `Com base no que você descreveu (\"${query}\"), eu recomendo:\n\n${bullets}${tail}`;
+};
