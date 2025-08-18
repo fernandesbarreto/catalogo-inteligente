@@ -11,11 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: "npm" }
 
       - name: Change to backend directory
         run: cd backend
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: "npm" }
 
       - run: npm ci || npm i --no-audit --no-fund
       - run: npm run lint --if-present
