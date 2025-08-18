@@ -35,10 +35,10 @@
               "pm.test('Status 200', () => pm.response.to.have.status(200));",
               "const json = pm.response.json();",
               "pm.test('Returns array of results', () => Array.isArray(json));",
-              "pm.test('Results have id and content', () => {",
+              "pm.test('Results have id and reason', () => {",
               "  if (json.length > 0) {",
               "    pm.expect(json[0]).to.have.property('id');",
-              "    pm.expect(json[0]).to.have.property('content');",
+              "    pm.expect(json[0]).to.have.property('reason');",
               "  }",
               "});",
               "console.log('Found', json.length, 'paints matching query');"
