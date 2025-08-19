@@ -78,7 +78,7 @@ export class AiController {
   private isPaletteImageIntent(query: string): boolean {
     const q = query.toLowerCase();
     return (
-      /\b(gerar|mostrar|ver)\b.*\b(imagem|foto)\b/.test(q) ||
+      /\b(gerar|gere|mostrar|ver)\b.*\b(imagem|foto)\b/.test(q) ||
       /\b(preview|paleta|aplicar cor|pintar parede)\b/.test(q)
     );
   }
@@ -176,6 +176,14 @@ export class AiController {
         routerActions.some((a) => a?.tool === "Geração de imagem") ||
         explicitAsk;
       const shouldCallChat = wantsImage;
+
+      console.log(`[AiController] Image intent analysis:`, {
+        query: validatedQuery.query,
+        explicitAsk,
+        routerActions: routerActions.map((a) => a?.tool),
+        wantsImage,
+        shouldCallChat,
+      });
 
       if (shouldCallChat) {
         try {

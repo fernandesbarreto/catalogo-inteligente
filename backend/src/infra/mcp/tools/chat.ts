@@ -25,13 +25,42 @@ export interface ChatToolOutput {
 
 function extractHex(text: string): string | null {
   const m = text.match(/#([0-9a-fA-F]{6})\b/);
-  return m ? `#${m[1]}` : null;
+  if (m) return `#${m[1]}`;
+
+  // Mapeamento de cores comuns para hex
+  const colorMap: Record<string, string> = {
+    vermelho: "#FF0000",
+    red: "#FF0000",
+    azul: "#0000FF",
+    blue: "#0000FF",
+    verde: "#00FF00",
+    green: "#00FF00",
+    amarelo: "#FFFF00",
+    yellow: "#FFFF00",
+    branco: "#FFFFFF",
+    white: "#FFFFFF",
+    preto: "#000000",
+    black: "#000000",
+    cinza: "#808080",
+    gray: "#808080",
+    rosa: "#FFC0CB",
+    pink: "#FFC0CB",
+  };
+
+  const q = text.toLowerCase();
+  for (const [color, hex] of Object.entries(colorMap)) {
+    if (q.includes(color)) {
+      return hex;
+    }
+  }
+
+  return null;
 }
 
 function simpleHeuristicIntent(message: string) {
   const q = message.toLowerCase();
   const wantsImage =
-    /(gerar|mostrar|ver|prévia|preview).*\b(imagem|foto)\b/.test(q) ||
+    /(gerar|gere|mostrar|ver|prévia|preview).*\b(imagem|foto)\b/.test(q) ||
     /\b(quero|gostaria|desejo)\s+(ver|visualizar|mostrar).*\b(imagem|foto|prévia)\b/.test(
       q
     ) ||

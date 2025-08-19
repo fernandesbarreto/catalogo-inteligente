@@ -206,7 +206,7 @@ async function validateSceneIdMaybe(sceneId?: string) {
 function wantsImageGeneration(text: string): boolean {
   const q = text.toLowerCase();
   return (
-    (/(gerar|mostrar|ver|prévia|preview|visualizar|repaint|aplicar)\b/.test(
+    (/(gerar|gere|mostrar|ver|prévia|preview|visualizar|repaint|aplicar)\b/.test(
       q
     ) &&
       /(imagem|foto|cena|parede|wall)/.test(q)) ||
