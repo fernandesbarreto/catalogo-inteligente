@@ -5,6 +5,7 @@ import { RecommendationAgentWithMCP } from "../../../../use-cases/ai/Recommendat
 import { FilterSearchTool } from "../../../../infra/search/FilterSearchTool";
 import { SemanticSearchTool } from "../../../../infra/search/SemanticSearchTool";
 import { ZodError } from "zod";
+import { makeChat } from "../../../../infra/ai/llm/OpenAIChat";
 
 export class AiController {
   private readonly prisma = new PrismaClient();
@@ -51,10 +52,13 @@ export class AiController {
         id: pick.id,
         reason: pick.reason,
       }));
+      // Natural language via LLM (fallback para template se falhar)
       const response = {
         picks,
         notes: `Encontradas ${result.length} tintas usando MCP.`,
-        message: this.formatPicksAsNaturalMessage(validatedQuery.query, picks),
+        message: await this.formatWithLLM(validatedQuery.query, picks).catch(
+          () => this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+        ),
       } as any;
 
       console.log(`[AiController] Recomendação retornada:`, {
@@ -123,7 +127,9 @@ export class AiController {
         picks,
         notes: `Encontradas ${result.length} tintas usando MCP (Model Context Protocol).`,
         mcpEnabled: true,
-        message: this.formatPicksAsNaturalMessage(validatedQuery.query, picks),
+        message: await this.formatWithLLM(validatedQuery.query, picks).catch(
+          () => this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+        ),
       } as any;
 
       console.log(`[AiController] Recomendação MCP retornada:`, {
@@ -213,6 +219,7 @@ export namespace AiControllerHelpers {
 declare module "./ai.controller" {
   interface AiController {
     formatPicksAsNaturalMessage(query: string, picks: SimplePick[]): string;
+    formatWithLLM(query: string, picks: SimplePick[]): Promise<string>;
   }
 }
 
@@ -275,4 +282,39 @@ AiController.prototype.formatPicksAsNaturalMessage = function (
       : "";
   // Sem repetir a intenção do usuário
   return `${message}${tail}`;
+};
+
+AiController.prototype.formatWithLLM = async function (
+  this: AiController,
+  query: string,
+  picks: SimplePick[]
+): Promise<string> {
+  // Se não houver picks, retorna mensagem padrão
+  if (!picks || picks.length === 0) {
+    return "Não encontrei opções exatas para sua necessidade. Pode me dar mais detalhes (ambiente, acabamento, cor desejada)?";
+  }
+
+  const system = `Você é um assistente especializado em tintas e acabamentos. Responda de forma natural, breve e útil.
+Regras:
+- Não inclua IDs.
+- Cite no máximo duas opções.
+- Use variação de linguagem, mas mantenha objetividade.
+- Pergunte se o usuário quer ver mais opções ao final, quando fizer sentido.
+- Integre o máximo de informações possíveis sobre as opções, como acabamento, cor, linha, etc.`;
+
+  const user = `Pedido do usuário: "${query}"
+Opções (JSON):
+${JSON.stringify(picks.slice(0, 5), null, 2)}`;
+
+  const chat = makeChat();
+  const resp = await chat.invoke([
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ] as any);
+  const text =
+    (resp as any)?.content?.[0]?.text ?? (resp as any)?.content ?? "";
+  if (!text || typeof text !== "string") {
+    throw new Error("llm_empty");
+  }
+  return text.trim();
 };
