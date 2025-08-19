@@ -166,6 +166,47 @@ export namespace AiControllerHelpers {
     r = r.replace(/\.\.\.$/, "");
     return r;
   }
+
+  export function parseReason(reason: string): {
+    name?: string;
+    color?: string;
+    surfaceType?: string;
+    roomType?: string;
+    finish?: string;
+    raw: string;
+  } {
+    const raw = normalizeReason(reason);
+    // Formatos esperados, exemplos:
+    // "Proteção Total - Branco Exterior - Branco Exterior (exterior, área externa, semibrilho)"
+    // "Clássica - Violeta Vibrante - Violeta Vibrante - fosco"
+    const result: any = { raw };
+    // Extrair parênteses, se existirem, como atributos
+    const parenMatch = raw.match(/\(([^)]+)\)\s*$/);
+    if (parenMatch) {
+      const parts = parenMatch[1].split(",").map((s) => s.trim());
+      // Heurística: geralmente temos [surfaceType, roomType, finish]
+      if (parts[0]) result.surfaceType = parts[0];
+      if (parts[1]) result.roomType = parts[1];
+      if (parts[2]) result.finish = parts[2];
+    }
+    const withoutParen = raw.replace(/\s*\([^)]*\)\s*$/, "");
+    const dashParts = withoutParen.split(" - ").map((s) => s.trim());
+    // Heurística: name normalmente no início, cor logo após
+    if (dashParts.length >= 1) result.name = dashParts[0];
+    if (dashParts.length >= 2) result.color = dashParts[1];
+    // Se finish não veio nos parênteses mas aparece como último dash, considerar
+    if (!result.finish && dashParts.length >= 3) {
+      const last = dashParts[dashParts.length - 1];
+      if (/fosco|semibrilho|acetinado|brilhante/i.test(last)) {
+        result.finish = last;
+      }
+    }
+    return result;
+  }
+
+  export function choice<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
 }
 
 // Extensão da classe para manter métodos puros
@@ -183,18 +224,55 @@ AiController.prototype.formatPicksAsNaturalMessage = function (
   if (!picks || picks.length === 0) {
     return "Não encontrei opções exatas para sua necessidade. Pode me dar mais detalhes (ambiente, acabamento, cor desejada)?";
   }
+  // Escolher 1-2 destaques de forma leve estocástica
+  const k = picks.length >= 2 ? AiControllerHelpers.choice([1, 2]) : 1;
+  const top = picks
+    .slice(0, k)
+    .map((p) => AiControllerHelpers.parseReason(p.reason));
 
-  const top = picks.slice(0, Math.min(3, picks.length));
-  const bullets = top
-    .map((p) => `• ${AiControllerHelpers.normalizeReason(p.reason)}`)
-    .join("\n");
+  const templates = [
+    // 1 item
+    (p: any) =>
+      `${p.name || "Uma boa opção"}${p.finish ? ` (${p.finish})` : ""}${
+        p.roomType ? `, ideal para ${p.roomType}` : ""
+      }${p.surfaceType ? ` em ${p.surfaceType}` : ""}${
+        p.color ? `, na cor ${p.color}` : ""
+      }.`,
+    (p: any) =>
+      `Recomendo ${p.name || "uma tinta indicada"}${
+        p.finish ? ` com acabamento ${p.finish}` : ""
+      }${p.roomType ? ` para ${p.roomType}` : ""}${
+        p.surfaceType ? ` (${p.surfaceType})` : ""
+      }.`,
+  ];
+
+  // Renderização curta para a segunda opção (sem frase completa)
+  const renderShort = (p: any) =>
+    `${p.name || "outra tinta"}${p.finish ? ` (${p.finish})` : ""}${
+      p.color ? `, cor ${p.color}` : ""
+    }`;
+
+  const joiners = [
+    (a: string, p: any) => `${a} Outra opção é ${renderShort(p)}.`,
+    (a: string, p: any) => `${a} Também posso sugerir ${renderShort(p)}.`,
+  ];
+
+  const followUps = [
+    "Quer que eu liste mais opções?",
+    "Posso mostrar mais alternativas se você quiser.",
+    "Prefere que eu traga opções com outro acabamento ou cor?",
+  ];
+
+  const first = AiControllerHelpers.choice(templates)(top[0]);
+  let message = first;
+  if (top.length === 2) {
+    message = AiControllerHelpers.choice(joiners)(first, top[1]);
+  }
 
   const tail =
     picks.length > top.length
-      ? `\n\nPosso mostrar mais opções se quiser (tenho mais ${
-          picks.length - top.length
-        }).`
+      ? ` ${AiControllerHelpers.choice(followUps)}`
       : "";
-
-  return `Com base no que você descreveu (\"${query}\"), eu recomendo:\n\n${bullets}${tail}`;
+  // Sem repetir a intenção do usuário
+  return `${message}${tail}`;
 };
