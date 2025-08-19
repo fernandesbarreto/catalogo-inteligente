@@ -42,11 +42,6 @@ describe("Agent Hybrid Routing Tests", () => {
 
         const executionTime = Date.now() - startTime;
 
-        console.log(`[Test] Query: "${query}"`);
-        console.log(`[Test] Results: ${result.picks.length}`);
-        console.log(`[Test] Execution time: ${executionTime}ms`);
-        console.log(`[Test] Notes: ${result.notes}`);
-
         // Verificar se a resposta tem a estrutura correta
         expect(result).toHaveProperty("picks");
         expect(result).toHaveProperty("notes");
@@ -91,11 +86,6 @@ describe("Agent Hybrid Routing Tests", () => {
 
         const executionTime = Date.now() - startTime;
 
-        console.log(`[Test] Query: "${query}"`);
-        console.log(`[Test] Results: ${result.picks.length}`);
-        console.log(`[Test] Execution time: ${executionTime}ms`);
-        console.log(`[Test] Notes: ${result.notes}`);
-
         // Verificar se a resposta tem a estrutura correta
         expect(result).toHaveProperty("picks");
         expect(result).toHaveProperty("notes");
@@ -132,11 +122,6 @@ describe("Agent Hybrid Routing Tests", () => {
 
       const executionTime = Date.now() - startTime;
 
-      console.log(`[Test] Query: "${query}" with filters:`, filters);
-      console.log(`[Test] Results: ${result.picks.length}`);
-      console.log(`[Test] Execution time: ${executionTime}ms`);
-      console.log(`[Test] Notes: ${result.notes}`);
-
       // Verificar se a resposta tem a estrutura correta
       expect(result).toHaveProperty("picks");
       expect(result).toHaveProperty("notes");
@@ -165,11 +150,6 @@ describe("Agent Hybrid Routing Tests", () => {
       const result = await agent.execute({ query, filters });
 
       const executionTime = Date.now() - startTime;
-
-      console.log(`[Test] Empty query with filters:`, filters);
-      console.log(`[Test] Results: ${result.picks.length}`);
-      console.log(`[Test] Execution time: ${executionTime}ms`);
-      console.log(`[Test] Notes: ${result.notes}`);
 
       // Verificar se a resposta tem a estrutura correta
       expect(result).toHaveProperty("picks");

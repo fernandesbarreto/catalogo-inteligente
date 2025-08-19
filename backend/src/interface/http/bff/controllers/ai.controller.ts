@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { RecommendationQuerySchema } from "../dto/ai.dto";
 import { RecommendationAgentWithMCP } from "../../../../use-cases/ai/RecommendationAgentWithMCP";
-import { FilterSearchTool } from "../../../../infra/search/FilterSearchTool";
 import { SemanticSearchTool } from "../../../../infra/search/SemanticSearchTool";
 import { ZodError } from "zod";
 import { makeChat } from "../../../../infra/ai/llm/OpenAIChat";
@@ -11,7 +10,6 @@ import { GenInput } from "../../../../domain/images/types";
 
 export class AiController {
   private readonly prisma = new PrismaClient();
-  private readonly filterSearchTool = new FilterSearchTool(this.prisma);
   private semanticSearchTool: SemanticSearchTool | null = null;
   private recommendationAgent: RecommendationAgentWithMCP | null = null;
 
@@ -23,7 +21,6 @@ export class AiController {
   }
 
   private async analyzeIntent(userMessage: string, history: any[]) {
-    // Usar o tool_router internamente
     const summary = history
       .slice(-8)
       .map((m) => `${m.role}: ${m.content}`)
@@ -220,35 +217,6 @@ export class AiController {
     );
   }
 
-  private async resolvePaletteInputs(query: string): Promise<{
-    sceneId: string;
-    hex: string;
-    finish?: "fosco" | "acetinado" | "semibrilho" | "brilhante";
-    size?: "1024x1024" | "1024x768" | "768x1024";
-  }> {
-    // Heurística simples: tenta extrair hex e finish do texto
-    const hexMatch = query.match(/#([0-9a-fA-F]{6})\b/);
-    const hex = hexMatch ? `#${hexMatch[1]}` : "#5FA3D1";
-    const finishMap: Record<string, any> = {
-      fosco: "fosco",
-      acetinado: "acetinado",
-      semibrilho: "semibrilho",
-      "semi-brilho": "semibrilho",
-      brilhante: "brilhante",
-    };
-    let finish: any = undefined;
-    for (const key of Object.keys(finishMap)) {
-      if (new RegExp(`\\b${key}\\b`, "i").test(query)) {
-        finish = finishMap[key];
-        break;
-      }
-    }
-    // Cena padrão (pode ser parametrizada via heurística no futuro)
-    const sceneId = "varanda/moderna-01";
-    const size: any = "1024x1024";
-    return { sceneId, hex, finish, size };
-  }
-
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {
     if (!this.recommendationAgent) {
       this.recommendationAgent = new RecommendationAgentWithMCP();
@@ -262,8 +230,6 @@ export class AiController {
       // Validar entrada com Zod
       const validatedQuery = RecommendationQuerySchema.parse(req.body);
 
-      console.log(`[AiController] Recebida recomendação:`, validatedQuery);
-
       const agent = await this.getRecommendationAgent();
       // If router suggests Prisma, prioritize filter_search only
       const routerActions = (req.body?.routerActions || []) as Array<any>;
@@ -274,14 +240,6 @@ export class AiController {
         : false;
 
       if (routerActions.length > 0) {
-        console.log(
-          `🎯 Using router actions: ${routerActions
-            .map((a) => a.tool)
-            .join(", ")}`
-        );
-        if (wantsFilterOnly) {
-          console.log(`  → Prioritizing Prisma filter search`);
-        }
       }
 
       const result = await agent.recommend({
@@ -313,14 +271,6 @@ export class AiController {
         routerActions.some((a) => a?.tool === "Geração de imagem") ||
         explicitAsk;
       const shouldCallChat = wantsImage;
-
-      console.log(`[AiController] Image intent analysis:`, {
-        query: validatedQuery.query,
-        explicitAsk,
-        routerActions: routerActions.map((a) => a?.tool),
-        wantsImage,
-        shouldCallChat,
-      });
 
       if (shouldCallChat) {
         try {
@@ -381,11 +331,6 @@ export class AiController {
                 picks
               );
       }
-
-      console.log(`[AiController] Recomendação retornada:`, {
-        picksCount: response.picks.length,
-        hasNotes: !!response.notes,
-      });
 
       res.json(response);
     } catch (error: any) {
@@ -493,9 +438,6 @@ export class AiController {
       // Validar entrada com Zod
       const validatedQuery = RecommendationQuerySchema.parse(req.body);
 
-      console.log(`[AiController] Recebida recomendação MCP:`, validatedQuery);
-      console.log(`history: ${JSON.stringify(req.body.history)}`);
-
       const agent = await this.getRecommendationAgent();
       const result = await agent.recommend({
         query: validatedQuery.query,
@@ -522,11 +464,6 @@ export class AiController {
             await this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
         ),
       } as any;
-
-      console.log(`[AiController] Recomendação MCP retornada:`, {
-        picksCount: response.picks.length,
-        mcpEnabled: response.mcpEnabled,
-      });
 
       res.json(response);
     } catch (error: any) {

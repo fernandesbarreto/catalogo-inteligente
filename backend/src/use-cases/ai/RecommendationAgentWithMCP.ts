@@ -42,25 +42,15 @@ export class RecommendationAgentWithMCP {
     // Tentar habilitar MCP se disponível
     try {
       await this.mcpAdapter.enable();
-      console.log("[RecommendationAgentWithMCP] MCP habilitado com sucesso");
-    } catch (error) {
-      console.log(
-        "[RecommendationAgentWithMCP] MCP não disponível, usando fallback"
-      );
-    }
+    } catch (error) {}
     if (!RecommendationAgentWithMCP.sessionMemory) {
       RecommendationAgentWithMCP.sessionMemory = await createSessionMemory();
-      console.log("[RecommendationAgentWithMCP] Session memory initialized");
     }
   }
 
   async recommend(
     request: RecommendationRequest
   ): Promise<RecommendationPick[]> {
-    console.log(
-      `[RecommendationAgentWithMCP] Processando recomendação: "${request.query}"`
-    );
-
     // Garantir MCP habilitado se solicitado
     if (request.useMCP && !this.mcpAdapter.isMCPEnabled()) {
       await this.initialize();
@@ -120,8 +110,6 @@ export class RecommendationAgentWithMCP {
 
     // Se MCP está habilitado e foi solicitado, orquestrar tools e aplicar RRF
     if (request.useMCP && this.mcpAdapter.isMCPEnabled()) {
-      console.log("[RecommendationAgentWithMCP] Orquestrando tools via MCP");
-
       // Estratégia: usar routerActions quando disponíveis; caso contrário, chamar ambas as tools com paginação leve (offset baseado na sessão)
       let offset = 0;
       if (request.sessionId) {
@@ -138,10 +126,6 @@ export class RecommendationAgentWithMCP {
         );
         const wantsSemantic = request.routerActions.some(
           (a) => a?.tool === "Busca semântica de tinta nos embeddings"
-        );
-
-        console.log(
-          `🛠️  Router-guided execution: filter=${wantsFilter}, semantic=${wantsSemantic}`
         );
 
         if (wantsFilter) {
@@ -161,7 +145,6 @@ export class RecommendationAgentWithMCP {
         }
       } else {
         // Fallback: call both tools
-        console.log(`🛠️  Fallback: calling both filter and semantic search`);
         const [filterResTemp, semanticResTemp] = await Promise.all([
           this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
@@ -180,10 +163,6 @@ export class RecommendationAgentWithMCP {
 
       const filterPicks = filterRes?.picks ?? [];
       const semanticPicks = semanticRes?.picks ?? [];
-
-      console.log(
-        `[RecommendationAgentWithMCP] filter: ${filterPicks.length}, semantic: ${semanticPicks.length}`
-      );
 
       // Evitar repetição: filtrar IDs já vistos na sessão
       let combined = this.combineWithRRF(filterPicks, semanticPicks);
@@ -226,9 +205,6 @@ export class RecommendationAgentWithMCP {
     }
 
     // Fallback: nenhum resultado
-    console.log(
-      "[RecommendationAgentWithMCP] Sem resultados após orquestração (MCP)."
-    );
     return [];
   }
 
