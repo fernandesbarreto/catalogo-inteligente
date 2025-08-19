@@ -22,6 +22,12 @@ export interface RecommendationRequest {
     role: "user" | "assistant";
     content: string;
   }>;
+  routerActions?: Array<{
+    tool?: string;
+    args?: Record<string, any>;
+    confidence?: number;
+    rationale?: string;
+  }>;
 }
 
 export class RecommendationAgentWithMCP {
@@ -116,38 +122,55 @@ export class RecommendationAgentWithMCP {
     if (request.useMCP && this.mcpAdapter.isMCPEnabled()) {
       console.log("[RecommendationAgentWithMCP] Orquestrando tools via MCP");
 
-      // Estratégia: chamar ambas as tools com paginação leve (offset baseado na sessão)
+      // Estratégia: usar routerActions quando disponíveis; caso contrário, chamar ambas as tools com paginação leve (offset baseado na sessão)
       let offset = 0;
-      if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
-        const snap = await RecommendationAgentWithMCP.sessionMemory.get(
-          request.sessionId
-        );
-        offset = snap?.nextOffset || 0;
+      if (request.sessionId) {
+        offset = parseInt(request.sessionId.slice(-2), 16) % 20;
       }
 
-      // Construir excludeIds com base no visto na sessão
-      const seenIds: string[] = (
-        request.sessionId && RecommendationAgentWithMCP.sessionMemory
-          ? (
-              await RecommendationAgentWithMCP.sessionMemory.get(
-                request.sessionId
-              )
-            )?.seenIds || []
-          : []
-      ) as string[];
+      let filterRes: any = null;
+      let semanticRes: any = null;
 
-      const [filterRes, semanticRes] = await Promise.all([
-        this.mcpAdapter.processRecommendation({
-          query: effectiveQuery,
-          context: { ...effectiveContext, offset, excludeIds: seenIds },
-          tools: ["filter_search"],
-        }),
-        this.mcpAdapter.processRecommendation({
-          query: effectiveQuery,
-          context: { ...effectiveContext, offset, excludeIds: seenIds },
-          tools: ["semantic_search"],
-        }),
-      ]);
+      if (request.routerActions && request.routerActions.length > 0) {
+        // Use router guidance
+        const wantsFilter = request.routerActions.some(a => a?.tool === "Procurar tinta no Prisma por filtro");
+        const wantsSemantic = request.routerActions.some(a => a?.tool === "Busca semântica de tinta nos embeddings");
+        
+        console.log(`🛠️  Router-guided execution: filter=${wantsFilter}, semantic=${wantsSemantic}`);
+        
+        if (wantsFilter) {
+          filterRes = await this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["filter_search"],
+          });
+        }
+        
+        if (wantsSemantic) {
+          semanticRes = await this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["semantic_search"],
+          });
+        }
+      } else {
+        // Fallback: call both tools
+        console.log(`🛠️  Fallback: calling both filter and semantic search`);
+        const [filterResTemp, semanticResTemp] = await Promise.all([
+          this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["filter_search"],
+          }),
+          this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["semantic_search"],
+          }),
+        ]);
+        filterRes = filterResTemp;
+        semanticRes = semanticResTemp;
+      }
 
       const filterPicks = filterRes?.picks ?? [];
       const semanticPicks = semanticRes?.picks ?? [];

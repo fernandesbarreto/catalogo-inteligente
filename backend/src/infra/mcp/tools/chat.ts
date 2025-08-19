@@ -32,7 +32,10 @@ function simpleHeuristicIntent(message: string) {
   const q = message.toLowerCase();
   const wantsImage =
     /(gerar|mostrar|ver|prévia|preview).*\b(imagem|foto)\b/.test(q) ||
-    /(pintar|aplicar).*\b(parede|tinta)\b/.test(q);
+    /\b(quero|gostaria|desejo)\s+(ver|visualizar|mostrar).*\b(imagem|foto|prévia)\b/.test(
+      q
+    ) ||
+    /\b(como|como ficaria|como se parece).*\b(imagem|foto|prévia)\b/.test(q);
   const hex = extractHex(message) || "#5FA3D1";
   const sceneId = "varanda/moderna-01";
   const finishMatch = q.match(
@@ -64,7 +67,7 @@ export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
 
   try {
     const system =
-      "Você é um orquestrador de ferramentas MCP. Decida se o usuário quer ver uma imagem de uma parede pintada. Extraia parâmetros. Retorne APENAS JSON válido com este shape: {\n" +
+      "Você é um orquestrador de ferramentas MCP. Decida se o usuário quer ver uma imagem de uma parede pintada. IMPORTANTE: Só gere imagem se o usuário EXPLICITAMENTE pedir para ver uma imagem, prévia, ou visualização. Para pedidos simples de busca de tintas, NÃO ofereça imagens. Retorne APENAS JSON válido com este shape: {\n" +
       '  "reply": string,\n' +
       '  "generateImage": boolean,\n' +
       '  "sceneId"?: string,\n' +
@@ -108,6 +111,16 @@ export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
       finish: h.finish,
       size: h.size,
     };
+  }
+
+  // Safety: only allow image generation if user explicitly asked in the last message
+  const explicit = simpleHeuristicIntent(userText).wantsImage;
+  if (decision.generateImage && !explicit) {
+    decision.generateImage = false;
+    // If the reply implies image, soften it
+    decision.reply =
+      decision.reply ||
+      "Certo! Posso listar opções de tintas ou gerar uma prévia se você pedir explicitamente.";
   }
 
   if (!decision.generateImage) {

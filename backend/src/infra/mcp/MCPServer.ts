@@ -5,6 +5,7 @@ import { FilterSearchTool } from "../search/FilterSearchTool";
 import { listScenesTool } from "./tools/list_scenes";
 import { generatePaletteImage } from "./tools/generate_palette_image";
 import { chatTool } from "./tools/chat";
+import { toolRouter } from "./tools/tool_router";
 import { PrismaClient } from "@prisma/client";
 
 export interface MCPTool {
@@ -170,6 +171,21 @@ export class MCPServer {
         },
       },
       {
+        name: "tool_router",
+        description:
+          "Roteador determinístico de pré-MCP: retorna JSON com actions para Prisma, busca semântica ou geração de imagem",
+        inputSchema: {
+          type: "object",
+          properties: {
+            userMessage: { type: "string" },
+            conversationSummary: { type: "string" },
+            limit: { type: "number" },
+            offset: { type: "number" },
+          },
+          required: ["userMessage"],
+        },
+      },
+      {
         name: "semantic_search",
         description:
           "Busca semântica em tintas usando embeddings e pgvector (RAG)",
@@ -276,6 +292,15 @@ export class MCPServer {
       switch (name) {
         case "chat":
           result = await chatTool({ messages: args.messages });
+          break;
+
+        case "tool_router":
+          result = await toolRouter({
+            userMessage: args.userMessage,
+            conversationSummary: args.conversationSummary,
+            limit: args.limit,
+            offset: args.offset,
+          });
           break;
 
         case "semantic_search":

@@ -22,6 +22,59 @@ export class AiController {
     return this.semanticSearchTool;
   }
 
+  async routeWithMCP(req: Request, res: Response) {
+    try {
+      const userMessage = (req.body?.userMessage || "").toString();
+      const history = (req.body?.history || []) as Array<{
+        role: "user" | "assistant";
+        content: string;
+      }>;
+      if (!userMessage || typeof userMessage !== "string") {
+        return res
+          .status(400)
+          .json({ actions: [], rationale: "userMessage obrigatório" });
+      }
+
+      // Build a concise conversation summary from last messages
+      const last = history.slice(-8);
+      const summary = last
+        .map((m) => `${m.role}: ${m.content}`)
+        .join(" \n ")
+        .slice(0, 600);
+
+      const mcp = new MCPClient(
+        process.env.MCP_COMMAND || "npm",
+        (process.env.MCP_ARGS
+          ? process.env.MCP_ARGS.split(" ")
+          : ["run", "mcp"]) as string[]
+      );
+      await mcp.connect();
+      const result = await mcp.callTool({
+        name: "tool_router",
+        arguments: {
+          userMessage,
+          conversationSummary: summary,
+          limit: req.body?.limit,
+          offset: req.body?.offset,
+        },
+      });
+      mcp.disconnect();
+      const payload = JSON.parse(result.content?.[0]?.text || "{}");
+      // Ensure shape
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        !Array.isArray(payload.actions)
+      ) {
+        return res.json({ actions: [], rationale: "router_invalid_response" });
+      }
+      return res.json(payload);
+    } catch (error) {
+      console.error("[AiController] routeWithMCP error", error);
+      return res.json({ actions: [], rationale: "router_error" });
+    }
+  }
+
   private isPaletteImageIntent(query: string): boolean {
     const q = query.toLowerCase();
     return (
@@ -75,6 +128,25 @@ export class AiController {
       console.log(`[AiController] Recebida recomendação:`, validatedQuery);
 
       const agent = await this.getRecommendationAgent();
+      // If router suggests Prisma, prioritize filter_search only
+      const routerActions = (req.body?.routerActions || []) as Array<any>;
+      const wantsFilterOnly = Array.isArray(routerActions)
+        ? routerActions.some(
+            (a) => a?.tool === "Procurar tinta no Prisma por filtro"
+          )
+        : false;
+
+      if (routerActions.length > 0) {
+        console.log(
+          `🎯 Using router actions: ${routerActions
+            .map((a) => a.tool)
+            .join(", ")}`
+        );
+        if (wantsFilterOnly) {
+          console.log(`  → Prioritizing Prisma filter search`);
+        }
+      }
+
       const result = await agent.recommend({
         query: validatedQuery.query,
         context: {
@@ -84,6 +156,7 @@ export class AiController {
           (req as any).session?.id || req.headers["x-session-id"]?.toString(),
         history: (req.body && req.body.history) || [],
         useMCP: true,
+        routerActions,
       });
 
       // Converter para o formato esperado pelo frontend
@@ -97,26 +170,47 @@ export class AiController {
         notes: `Encontradas ${result.length} tintas usando MCP.`,
       } as any;
 
-      try {
-        const mcp = new MCPClient(
-          process.env.MCP_COMMAND || "npm",
-          (process.env.MCP_ARGS
-            ? process.env.MCP_ARGS.split(" ")
-            : ["run", "mcp"]) as string[]
-        );
-        await mcp.connect();
-        const messages = ([...(validatedQuery.history || [])] as any[]).concat([
-          { role: "user", content: validatedQuery.query },
-        ]);
-        const toolRes = await mcp.callTool({
-          name: "chat",
-          arguments: { messages },
-        });
-        mcp.disconnect();
-        const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
-        if (payload?.reply) {
-          (response as any).message = payload.reply;
-        } else {
+      // Only call chat tool if we have picks OR if router suggests image generation
+      const explicitAsk = this.isPaletteImageIntent(validatedQuery.query);
+      const wantsImage =
+        routerActions.some((a) => a?.tool === "Geração de imagem") ||
+        explicitAsk;
+      const shouldCallChat = wantsImage;
+
+      if (shouldCallChat) {
+        try {
+          const mcp = new MCPClient(
+            process.env.MCP_COMMAND || "npm",
+            (process.env.MCP_ARGS
+              ? process.env.MCP_ARGS.split(" ")
+              : ["run", "mcp"]) as string[]
+          );
+          await mcp.connect();
+          const messages = (
+            [...(validatedQuery.history || [])] as any[]
+          ).concat([{ role: "user", content: validatedQuery.query }]);
+          const toolRes = await mcp.callTool({
+            name: "chat",
+            arguments: { messages },
+          });
+          mcp.disconnect();
+          const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
+          if (payload?.reply) {
+            (response as any).message = payload.reply;
+          } else {
+            (response as any).message = await this.formatWithLLM(
+              validatedQuery.query,
+              picks
+            ).catch(() =>
+              this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+            );
+          }
+          if (payload?.image?.imageBase64) {
+            (response as any).paletteImage = payload.image;
+            (response as any).imageIntent = true;
+          }
+        } catch (e) {
+          console.error(`[AiController] MCP chat fallback to LLM:`, e);
           (response as any).message = await this.formatWithLLM(
             validatedQuery.query,
             picks
@@ -124,17 +218,12 @@ export class AiController {
             this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
           );
         }
-        if (payload?.image?.imageBase64) {
-          (response as any).paletteImage = payload.image;
-        }
-      } catch (e) {
-        console.error(`[AiController] MCP chat fallback to LLM:`, e);
-        (response as any).message = await this.formatWithLLM(
-          validatedQuery.query,
-          picks
-        ).catch(() =>
-          this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
-        );
+      } else {
+        (response as any).imageIntent = false;
+        (response as any).message =
+          picks.length === 0
+            ? "Não encontrei tintas com esses critérios. Pode me dizer o ambiente (sala, quarto...), acabamento (fosco, acetinado...) e a cor desejada?"
+            : this.formatPicksAsNaturalMessage(validatedQuery.query, picks);
       }
 
       console.log(`[AiController] Recomendação retornada:`, {

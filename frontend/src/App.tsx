@@ -10,16 +10,16 @@ interface Message {
   imageProvider?: string;
 }
 
-interface RecommendationPick {
-  id: string;
-  reason: string;
-}
+// interface RecommendationPick {
+//   id: string;
+//   reason: string;
+// }
 
-interface RecommendationResponse {
-  picks: RecommendationPick[];
-  notes?: string;
-  mcpEnabled?: boolean;
-}
+// interface RecommendationResponse {
+//   picks: RecommendationPick[];
+//   notes?: string;
+//   mcpEnabled?: boolean;
+// }
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([
@@ -58,7 +58,7 @@ function App() {
       // Fallback non-persistent
       if (!sessionId) setSessionId(`${Date.now()}-${Math.random()}`);
     }
-  }, []);
+  }, [sessionId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +83,24 @@ function App() {
         content: m.content,
       }));
 
+      // 1) Call router first so backend decides which tools to run
+      const routerRes = await fetch("http://localhost:3000/bff/ai/router", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": sessionId || "",
+        },
+        body: JSON.stringify({ userMessage: userMessage.content, history }),
+      });
+      // We do not block on router failure; continue to main request
+      let routerActions: any[] = [];
+      try {
+        if (routerRes.ok) {
+          const r = await routerRes.json();
+          if (Array.isArray(r?.actions)) routerActions = r.actions;
+        }
+      } catch {}
+
       const response = await fetch(
         "http://localhost:3000/bff/ai/recommendations",
         {
@@ -91,7 +109,11 @@ function App() {
             "Content-Type": "application/json",
             "x-session-id": sessionId || "",
           },
-          body: JSON.stringify({ query: inputValue.trim(), history }),
+          body: JSON.stringify({
+            query: inputValue.trim(),
+            history,
+            routerActions,
+          }),
         }
       );
 
@@ -133,8 +155,12 @@ function App() {
         id: (Date.now() + 1).toString(),
         type: "bot",
         content: botContent,
-        imageBase64: data?.paletteImage?.imageBase64,
-        imageProvider: data?.paletteImage?.provider,
+        imageBase64: data?.imageIntent
+          ? data?.paletteImage?.imageBase64
+          : undefined,
+        imageProvider: data?.imageIntent
+          ? data?.paletteImage?.provider
+          : undefined,
         timestamp: new Date(),
       };
 
@@ -152,8 +178,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  // Removed standalone image generation; handled by chat responses now
 
   const exampleQueries = [
     "Preciso de uma tinta azul para quarto infantil",
@@ -272,8 +296,6 @@ function App() {
           </div>
         </div>
       </main>
-
-      {/* Standalone palette generator removed; images now come via chat replies */}
 
       <footer className="App-footer">
         <p>Powered by MCP • Assistente Inteligente de Tintas</p>
