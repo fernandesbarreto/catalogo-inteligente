@@ -1,9 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Paint } from "../types";
 
-// Constants
-const PAINTS_PER_PAGE = 15;
-
 interface PaintsProps {
   onFetchPaints: (page: number, searchQuery: string) => Promise<void>;
   paints: Paint[];
