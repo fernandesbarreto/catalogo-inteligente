@@ -27,6 +27,9 @@ services:
       DATABASE_URL: postgres://app:app@db:5432/appdb
       JWT_SECRET: change-me
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STABILITY_API_KEY: ${STABILITY_API_KEY:-}
+      IMAGE_PROVIDER: stability
+      ASSETS_SCENES_DIR: /app/tmp/test-scenes
     volumes:
       - .:/app
       - /app/node_modules # evita conflitar com node_modules do host

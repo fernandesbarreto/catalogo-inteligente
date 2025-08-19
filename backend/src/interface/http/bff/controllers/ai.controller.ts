@@ -6,6 +6,8 @@ import { FilterSearchTool } from "../../../../infra/search/FilterSearchTool";
 import { SemanticSearchTool } from "../../../../infra/search/SemanticSearchTool";
 import { ZodError } from "zod";
 import { makeChat } from "../../../../infra/ai/llm/OpenAIChat";
+import { MCPClient } from "../../../../infra/mcp/MCPClient";
+import { GenInput } from "../../../../domain/images/types";
 
 export class AiController {
   private readonly prisma = new PrismaClient();
@@ -18,6 +20,43 @@ export class AiController {
       this.semanticSearchTool = new SemanticSearchTool();
     }
     return this.semanticSearchTool;
+  }
+
+  private isPaletteImageIntent(query: string): boolean {
+    const q = query.toLowerCase();
+    return (
+      /\b(gerar|mostrar|ver)\b.*\b(imagem|foto)\b/.test(q) ||
+      /\b(preview|paleta|aplicar cor|pintar parede)\b/.test(q)
+    );
+  }
+
+  private async resolvePaletteInputs(query: string): Promise<{
+    sceneId: string;
+    hex: string;
+    finish?: "fosco" | "acetinado" | "semibrilho" | "brilhante";
+    size?: "1024x1024" | "1024x768" | "768x1024";
+  }> {
+    // Heurística simples: tenta extrair hex e finish do texto
+    const hexMatch = query.match(/#([0-9a-fA-F]{6})\b/);
+    const hex = hexMatch ? `#${hexMatch[1]}` : "#5FA3D1";
+    const finishMap: Record<string, any> = {
+      fosco: "fosco",
+      acetinado: "acetinado",
+      semibrilho: "semibrilho",
+      "semi-brilho": "semibrilho",
+      brilhante: "brilhante",
+    };
+    let finish: any = undefined;
+    for (const key of Object.keys(finishMap)) {
+      if (new RegExp(`\\b${key}\\b`, "i").test(query)) {
+        finish = finishMap[key];
+        break;
+      }
+    }
+    // Cena padrão (pode ser parametrizada via heurística no futuro)
+    const sceneId = "varanda/moderna-01";
+    const size: any = "1024x1024";
+    return { sceneId, hex, finish, size };
   }
 
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {
@@ -52,14 +91,51 @@ export class AiController {
         id: pick.id,
         reason: pick.reason,
       }));
-      // Natural language via LLM (fallback para template se falhar)
+      // Mensagem via MCP chat tool: decide se gera imagem e retorna no chat
       const response = {
         picks,
         notes: `Encontradas ${result.length} tintas usando MCP.`,
-        message: await this.formatWithLLM(validatedQuery.query, picks).catch(
-          () => this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
-        ),
       } as any;
+
+      try {
+        const mcp = new MCPClient(
+          process.env.MCP_COMMAND || "npm",
+          (process.env.MCP_ARGS
+            ? process.env.MCP_ARGS.split(" ")
+            : ["run", "mcp"]) as string[]
+        );
+        await mcp.connect();
+        const messages = ([...(validatedQuery.history || [])] as any[]).concat([
+          { role: "user", content: validatedQuery.query },
+        ]);
+        const toolRes = await mcp.callTool({
+          name: "chat",
+          arguments: { messages },
+        });
+        mcp.disconnect();
+        const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
+        if (payload?.reply) {
+          (response as any).message = payload.reply;
+        } else {
+          (response as any).message = await this.formatWithLLM(
+            validatedQuery.query,
+            picks
+          ).catch(() =>
+            this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+          );
+        }
+        if (payload?.image?.imageBase64) {
+          (response as any).paletteImage = payload.image;
+        }
+      } catch (e) {
+        console.error(`[AiController] MCP chat fallback to LLM:`, e);
+        (response as any).message = await this.formatWithLLM(
+          validatedQuery.query,
+          picks
+        ).catch(() =>
+          this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+        );
+      }
 
       console.log(`[AiController] Recomendação retornada:`, {
         picksCount: response.picks.length,
@@ -96,6 +172,74 @@ export class AiController {
         error: "internal_error",
         message: "Erro na busca semântica",
       });
+    }
+  }
+
+  async generatePaletteImage(req: Request, res: Response) {
+    try {
+      const body = req.body as Partial<GenInput>;
+      if (!body?.sceneId || !body?.hex) {
+        return res.status(400).json({
+          error: "validation_error",
+          message: "sceneId and hex are required",
+        });
+      }
+      // Fast path if provider is local: avoid spawning MCP for latency in CI/E2E
+      if ((process.env.IMAGE_PROVIDER || "local").toLowerCase() === "local") {
+        const { generatePaletteImageFast } = await import(
+          "../../../../infra/mcp/tools/generate_palette_image_fast"
+        );
+        const out = await generatePaletteImageFast(body as GenInput);
+        return res.json({
+          imageBase64: out.imageBase64,
+          provider: out.provider,
+        });
+      }
+
+      try {
+        const mcp = new MCPClient(
+          process.env.MCP_COMMAND || "npm",
+          (process.env.MCP_ARGS
+            ? process.env.MCP_ARGS.split(" ")
+            : ["run", "mcp"]) as string[]
+        );
+        await mcp.connect();
+        const result = await mcp.callTool({
+          name: "generate_palette_image",
+          arguments: {
+            sceneId: body.sceneId,
+            hex: body.hex,
+            finish: body.finish,
+            seed: body.seed,
+            size: body.size,
+          },
+        });
+        await new Promise((r) => setTimeout(r, 0));
+        mcp.disconnect();
+        const payload = JSON.parse(result.content?.[0]?.text || "{}");
+        if (!payload?.imageBase64) {
+          throw new Error("mcp_invalid_response");
+        }
+        return res.json({
+          imageBase64: payload.imageBase64,
+          provider: payload.provider,
+        });
+      } catch (err) {
+        console.error(`[AiController] MCP fallback to local:`, err);
+        const { generatePaletteImageFast } = await import(
+          "../../../../infra/mcp/tools/generate_palette_image_fast"
+        );
+        const out = await generatePaletteImageFast(body as GenInput);
+        return res.json({
+          imageBase64: out.imageBase64,
+          provider: out.provider,
+        });
+      }
+    } catch (error: any) {
+      console.error(`[AiController] Erro generatePaletteImage:`, error);
+      return res
+        .status(500)
+        .json({ error: "internal_error", message: "Erro ao gerar imagem" });
     }
   }
 

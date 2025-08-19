@@ -6,6 +6,8 @@ interface Message {
   type: "user" | "bot";
   content: string;
   timestamp: Date;
+  imageBase64?: string;
+  imageProvider?: string;
 }
 
 interface RecommendationPick {
@@ -33,6 +35,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionId, setSessionId] = useState<string>("");
+  // Image responses are now returned via chat (no standalone generator)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -81,7 +84,7 @@ function App() {
       }));
 
       const response = await fetch(
-        "http://localhost:3000/bff/ai/recommendations/mcp",
+        "http://localhost:3000/bff/ai/recommendations",
         {
           method: "POST",
           headers: {
@@ -130,6 +133,8 @@ function App() {
         id: (Date.now() + 1).toString(),
         type: "bot",
         content: botContent,
+        imageBase64: data?.paletteImage?.imageBase64,
+        imageProvider: data?.paletteImage?.provider,
         timestamp: new Date(),
       };
 
@@ -147,6 +152,8 @@ function App() {
       setLoading(false);
     }
   };
+
+  // Removed standalone image generation; handled by chat responses now
 
   const exampleQueries = [
     "Preciso de uma tinta azul para quarto infantil",
@@ -177,7 +184,25 @@ function App() {
                   {message.type === "bot" ? (
                     <div className="bot-message">
                       <div className="bot-avatar">🤖</div>
-                      <div className="message-text">{message.content}</div>
+                      <div className="message-text">
+                        {message.content}
+                        {message.imageBase64 && (
+                          <div
+                            className="palette-preview"
+                            style={{ marginTop: 12 }}
+                          >
+                            <img
+                              src={message.imageBase64}
+                              alt="Prévia gerada"
+                            />
+                            {message.imageProvider && (
+                              <div className="palette-meta">
+                                provider: {message.imageProvider}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="user-message">
@@ -247,6 +272,8 @@ function App() {
           </div>
         </div>
       </main>
+
+      {/* Standalone palette generator removed; images now come via chat replies */}
 
       <footer className="App-footer">
         <p>Powered by MCP • Assistente Inteligente de Tintas</p>
