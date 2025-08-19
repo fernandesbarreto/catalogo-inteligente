@@ -65,6 +65,18 @@ router.use("/ai", aiRoutes);
 // MCP ROUTES
 router.use("/mcp", mcpRoutes);
 
+// PUBLIC PAINTS ENDPOINT (for browsing)
+const publicPaintsCtl = makePaintsController({
+  create: new CreatePaint(paintRepo),
+  update: new UpdatePaint(paintRepo),
+  list: new ListPaints(paintRepo),
+  get: new GetPaint(paintRepo),
+  delete: new DeletePaint(paintRepo),
+});
+
+router.get("/paints/public", publicPaintsCtl.list);
+router.get("/paints/public/:id", publicPaintsCtl.get);
+
 router.use(requireAuth, attachRoles);
 
 // USERS (somente ADMIN)

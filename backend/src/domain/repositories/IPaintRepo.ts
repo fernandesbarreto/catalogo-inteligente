@@ -11,6 +11,14 @@ export interface CreatePaintDTO {
 
 export interface UpdatePaintDTO extends Partial<CreatePaintDTO> {}
 
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface IPaintRepo {
   create(data: CreatePaintDTO): Promise<{ id: string } & CreatePaintDTO>;
   createWithEmbedding(
@@ -22,7 +30,7 @@ export interface IPaintRepo {
     skip: number,
     take: number,
     q?: string
-  ): Promise<Array<{ id: string } & CreatePaintDTO>>;
+  ): Promise<PaginatedResult<{ id: string } & CreatePaintDTO>>;
   update(
     id: string,
     data: UpdatePaintDTO
