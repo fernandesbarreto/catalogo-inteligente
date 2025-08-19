@@ -20,6 +20,7 @@ export class MCPClient extends EventEmitter {
     number,
     { resolve: Function; reject: Function }
   >();
+  private stdoutBuffer = ""; // <- NOVO
 
   constructor(private command: string, private args: string[] = []) {
     super();
@@ -31,31 +32,43 @@ export class MCPClient extends EventEmitter {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
-      this.process.stdout?.on("data", (data) => {
-        const lines = data
-          .toString()
-          .split("\n")
-          .filter((line: string) => line.trim());
+      // -------- STDOUT: só JSON-RPC por linha --------
+      this.process.stdout?.on("data", (chunk) => {
+        this.stdoutBuffer += chunk.toString();
 
-        for (const line of lines) {
-          // Ignorar linhas que começam com [ (logs de console)
-          if (line.startsWith("[")) {
+        // consome linhas completas
+        let nlIndex: number;
+        while ((nlIndex = this.stdoutBuffer.indexOf("\n")) >= 0) {
+          const rawLine = this.stdoutBuffer.slice(0, nlIndex);
+          this.stdoutBuffer = this.stdoutBuffer.slice(nlIndex + 1);
+
+          const line = rawLine.trim();
+          if (!line) continue;
+
+          // só aceite envelopes JSON-RPC
+          if (!(line.startsWith("{") && line.includes('"jsonrpc"'))) {
+            // jogue fora ruídos que vierem no stdout do servidor
+            // console.debug("[MCPClient] stdout(non-jsonrpc):", line.slice(0, 120));
             continue;
           }
 
           try {
             const response = JSON.parse(line);
             this.handleResponse(response);
-          } catch (error) {
-            // Silenciar erros de parse para logs de console
-            if (!line.startsWith("[")) {
-              console.error("[MCPClient] Erro ao parsear resposta:", error);
-            }
+          } catch (err) {
+            console.error(
+              "[MCPClient] Erro ao parsear JSON-RPC:",
+              (err as Error).message,
+              "| line:",
+              line.slice(0, 200)
+            );
           }
         }
       });
 
+      // -------- STDERR: logs livres --------
       this.process.stderr?.on("data", (data) => {
+        // mantenha verboso aqui; não tente parsear
         console.error("[MCPClient] stderr:", data.toString());
       });
 
