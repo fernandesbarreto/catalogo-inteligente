@@ -46,6 +46,10 @@ export class FilterSearchTool implements ISearchTool {
         mode: "insensitive",
       };
     }
+    if ((filters as any)?.color) {
+      const color = (filters as any).color as string;
+      where.color = { contains: color, mode: "insensitive" };
+    }
 
     // Busca por texto nos campos relevantes
     if (query.trim()) {
@@ -85,12 +89,14 @@ export class FilterSearchTool implements ISearchTool {
         beige: ["beige", "bege"],
       };
 
-      // Encontrar mapeamento de cores para a query
+      // Encontrar mapeamento de cores para a query (fallback)
       let colorVariations: string[] = [];
-      for (const [colorKey, variations] of Object.entries(colorMappings)) {
-        if (queryLower.includes(colorKey)) {
-          colorVariations = variations;
-          break;
+      if (!(filters as any)?.color) {
+        for (const [colorKey, variations] of Object.entries(colorMappings)) {
+          if (queryLower.includes(colorKey)) {
+            colorVariations = variations;
+            break;
+          }
         }
       }
 
@@ -148,9 +154,18 @@ export class FilterSearchTool implements ISearchTool {
 
     console.log(`[FilterSearchTool] Encontrados ${paints.length} resultados`);
 
-    return paints.map((paint) => ({
+    let picks = paints.map((paint) => ({
       id: paint.id,
       reason: `Filtro: ${paint.name} - ${paint.color} (${paint.surfaceType}, ${paint.roomType}, ${paint.finish})`,
     }));
+
+    // Excluir IDs já vistos (se enviados)
+    const exclude = ((filters as any)?.excludeIds as string[]) || [];
+    if (exclude.length > 0) {
+      const excl = new Set(exclude);
+      picks = picks.filter((p) => !excl.has(p.id));
+    }
+
+    return picks;
   }
 }

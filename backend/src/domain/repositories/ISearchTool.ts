@@ -6,6 +6,8 @@ export interface SearchFilters {
   finish?: string;
   line?: string;
   offset?: number;
+  color?: string;
+  excludeIds?: string[];
 }
 
 export interface ISearchTool {

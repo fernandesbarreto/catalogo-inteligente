@@ -125,15 +125,26 @@ export class RecommendationAgentWithMCP {
         offset = snap?.nextOffset || 0;
       }
 
+      // Construir excludeIds com base no visto na sessão
+      const seenIds: string[] = (
+        request.sessionId && RecommendationAgentWithMCP.sessionMemory
+          ? (
+              await RecommendationAgentWithMCP.sessionMemory.get(
+                request.sessionId
+              )
+            )?.seenIds || []
+          : []
+      ) as string[];
+
       const [filterRes, semanticRes] = await Promise.all([
         this.mcpAdapter.processRecommendation({
           query: effectiveQuery,
-          context: { ...effectiveContext, offset },
+          context: { ...effectiveContext, offset, excludeIds: seenIds },
           tools: ["filter_search"],
         }),
         this.mcpAdapter.processRecommendation({
           query: effectiveQuery,
-          context: { ...effectiveContext, offset },
+          context: { ...effectiveContext, offset, excludeIds: seenIds },
           tools: ["semantic_search"],
         }),
       ]);
@@ -145,14 +156,21 @@ export class RecommendationAgentWithMCP {
         `[RecommendationAgentWithMCP] filter: ${filterPicks.length}, semantic: ${semanticPicks.length}`
       );
 
-      const combined = this.combineWithRRF(filterPicks, semanticPicks).slice(
-        0,
-        10
-      );
+      // Evitar repetição: filtrar IDs já vistos na sessão
+      let combined = this.combineWithRRF(filterPicks, semanticPicks);
+      if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+        const snap = await RecommendationAgentWithMCP.sessionMemory.get(
+          request.sessionId
+        );
+        const seen = new Set(snap?.seenIds || []);
+        combined = combined.filter((p) => !seen.has(p.id));
+      }
+      combined = combined.slice(0, 10);
 
       if (combined.length > 0) {
         // Atualizar memória de sessão com filtros efetivos
         if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+          // Atualizar memória: offset, lastQuery e adicionar IDs vistos
           await RecommendationAgentWithMCP.sessionMemory.set(
             request.sessionId,
             {
@@ -160,6 +178,16 @@ export class RecommendationAgentWithMCP {
               lastQuery: effectiveQuery,
               lastPicks: combined.map((p) => ({ id: p.id, reason: p.reason })),
               nextOffset: offset + 10,
+              seenIds: [
+                ...new Set([
+                  ...((
+                    await RecommendationAgentWithMCP.sessionMemory.get(
+                      request.sessionId
+                    )
+                  )?.seenIds || []),
+                  ...combined.map((p) => p.id),
+                ]),
+              ],
               lastUpdatedAt: Date.now(),
             }
           );
@@ -192,6 +220,7 @@ export class RecommendationAgentWithMCP {
     roomType?: string;
     finish?: string;
     line?: string;
+    color?: string;
   } {
     const q = query.toLowerCase();
     const filters: any = {};
@@ -227,6 +256,16 @@ export class RecommendationAgentWithMCP {
     if (/(superlav[áa]vel)/.test(q)) filters.line = "Superlavável";
     else if (/(toque de seda)/.test(q)) filters.line = "Toque de Seda";
     else if (/(fosco completo)/.test(q)) filters.line = "Fosco Completo";
+
+    // color intents (padrões simples)
+    if (/(branco|branca|white)/.test(q)) filters.color = "branco";
+    else if (/(preto|preta|black)/.test(q)) filters.color = "preto";
+    else if (/(cinza|cinzento|gray|grey)/.test(q)) filters.color = "cinza";
+    else if (/(azul|blue)/.test(q)) filters.color = "azul";
+    else if (/(vermelho|red)/.test(q)) filters.color = "vermelho";
+    else if (/(verde|green)/.test(q)) filters.color = "verde";
+    else if (/(amarelo|yellow)/.test(q)) filters.color = "amarelo";
+    else if (/(rosa|pink)/.test(q)) filters.color = "rosa";
 
     return filters;
   }

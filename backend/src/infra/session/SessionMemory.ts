@@ -13,6 +13,7 @@ export interface SessionSnapshot {
   lastQuery?: string;
   lastPicks?: Array<{ id: string; reason: string }>;
   nextOffset?: number;
+  seenIds?: string[];
   lastUpdatedAt: number;
 }
 

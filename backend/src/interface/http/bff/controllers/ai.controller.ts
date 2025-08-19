@@ -304,6 +304,7 @@ Regras:
 - Integre o máximo de informações possíveis sobre as opções, como acabamento, cor, linha, etc.`;
 
   const user = `Pedido do usuário: "${query}"
+Se houver contexto de cor (ex.: branco), mantenha a cor nas opções apresentadas.
 Opções (JSON):
 ${JSON.stringify(picks.slice(0, 5), null, 2)}
 Observação: Se o usuário pedir mais opções, continue no mesmo contexto anterior.`;

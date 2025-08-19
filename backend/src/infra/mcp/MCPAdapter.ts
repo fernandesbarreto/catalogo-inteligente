@@ -61,7 +61,17 @@ export class MCPAdapter {
         name: toolName,
         arguments: {
           query: request.query,
-          filters: request.context?.filters,
+          filters: {
+            ...(request.context?.filters || {}),
+            // Propagar paginação vinda do agente (quando existir)
+            ...((request as any).context?.offset !== undefined
+              ? { offset: (request as any).context.offset }
+              : {}),
+            // Excluir IDs já vistos nesta sessão
+            ...((request as any).context?.excludeIds?.length
+              ? { excludeIds: (request as any).context.excludeIds }
+              : {}),
+          },
         },
       });
 
@@ -86,8 +96,15 @@ export class MCPAdapter {
         return null;
       }
 
+      // toolResult pode vir como objeto { picks: [...] } ou array direto
+      const picksArray = Array.isArray(toolResult)
+        ? toolResult
+        : Array.isArray(toolResult?.picks)
+        ? toolResult.picks
+        : [];
+
       const mcpResponse: MCPResponse = {
-        picks: toolResult.map((item: any) => ({
+        picks: picksArray.map((item: any) => ({
           id: item.id,
           reason: item.reason,
         })),
