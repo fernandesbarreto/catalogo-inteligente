@@ -2,6 +2,8 @@ import * as readline from "node:readline";
 import { stdin, stdout } from "node:process";
 import { SemanticSearchTool } from "../search/SemanticSearchTool";
 import { FilterSearchTool } from "../search/FilterSearchTool";
+import { listScenesTool } from "./tools/list_scenes";
+import { generatePaletteImage } from "./tools/generate_palette_image";
 import { PrismaClient } from "@prisma/client";
 
 export interface MCPTool {
@@ -193,6 +195,42 @@ export class MCPServer {
           required: ["query"],
         },
       },
+      {
+        name: "list_scenes",
+        description: "Lista cenas com máscara disponíveis no catálogo",
+        inputSchema: {
+          type: "object",
+          properties: {
+            roomType: {
+              type: "string",
+              description: "Filtrar por tipo de ambiente",
+            },
+          },
+          required: [],
+        },
+      },
+      {
+        name: "generate_palette_image",
+        description:
+          "Gera imagem de parede pintada a partir de uma cena base e máscara (local/IA)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sceneId: { type: "string" },
+            hex: { type: "string" },
+            finish: {
+              type: "string",
+              enum: ["fosco", "acetinado", "semibrilho", "brilhante"],
+            },
+            seed: { type: "number" },
+            size: {
+              type: "string",
+              enum: ["1024x1024", "1024x768", "768x1024"],
+            },
+          },
+          required: ["sceneId", "hex"],
+        },
+      },
     ];
 
     return {
@@ -218,6 +256,20 @@ export class MCPServer {
 
         case "filter_search":
           result = await this.filterSearch.execute(args.query, args.filters);
+          break;
+
+        case "list_scenes":
+          result = await listScenesTool({ roomType: args?.roomType });
+          break;
+
+        case "generate_palette_image":
+          result = await generatePaletteImage({
+            sceneId: args.sceneId,
+            hex: args.hex,
+            finish: args.finish,
+            seed: args.seed,
+            size: args.size,
+          });
           break;
 
         default:
