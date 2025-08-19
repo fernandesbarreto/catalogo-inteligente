@@ -133,11 +133,17 @@ export class RecommendationAgentWithMCP {
 
       if (request.routerActions && request.routerActions.length > 0) {
         // Use router guidance
-        const wantsFilter = request.routerActions.some(a => a?.tool === "Procurar tinta no Prisma por filtro");
-        const wantsSemantic = request.routerActions.some(a => a?.tool === "Busca semântica de tinta nos embeddings");
-        
-        console.log(`🛠️  Router-guided execution: filter=${wantsFilter}, semantic=${wantsSemantic}`);
-        
+        const wantsFilter = request.routerActions.some(
+          (a) => a?.tool === "Procurar tinta no Prisma por filtro"
+        );
+        const wantsSemantic = request.routerActions.some(
+          (a) => a?.tool === "Busca semântica de tinta nos embeddings"
+        );
+
+        console.log(
+          `🛠️  Router-guided execution: filter=${wantsFilter}, semantic=${wantsSemantic}`
+        );
+
         if (wantsFilter) {
           filterRes = await this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
@@ -145,7 +151,7 @@ export class RecommendationAgentWithMCP {
             tools: ["filter_search"],
           });
         }
-        
+
         if (wantsSemantic) {
           semanticRes = await this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
