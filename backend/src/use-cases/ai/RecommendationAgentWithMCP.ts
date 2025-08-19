@@ -1,5 +1,9 @@
 import { RecommendationPick } from "../../interface/http/bff/dto/ai.dto";
 import { MCPAdapter } from "../../infra/mcp/MCPAdapter";
+import {
+  ISessionMemory,
+  createSessionMemory,
+} from "../../infra/session/SessionMemory";
 
 export interface RecommendationRequest {
   query: string;
@@ -13,10 +17,16 @@ export interface RecommendationRequest {
     preferences?: string[];
   };
   useMCP?: boolean;
+  sessionId?: string;
+  history?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
 }
 
 export class RecommendationAgentWithMCP {
   private mcpAdapter: MCPAdapter;
+  private static sessionMemory: ISessionMemory | null = null;
 
   constructor() {
     this.mcpAdapter = new MCPAdapter();
@@ -32,6 +42,10 @@ export class RecommendationAgentWithMCP {
         "[RecommendationAgentWithMCP] MCP não disponível, usando fallback"
       );
     }
+    if (!RecommendationAgentWithMCP.sessionMemory) {
+      RecommendationAgentWithMCP.sessionMemory = await createSessionMemory();
+      console.log("[RecommendationAgentWithMCP] Session memory initialized");
+    }
   }
 
   async recommend(
@@ -46,8 +60,30 @@ export class RecommendationAgentWithMCP {
       await this.initialize();
     }
 
-    // Detecção simples de intenção → gerar filtros a partir da query
-    const inferredFilters = this.inferFiltersFromQuery(request.query);
+    // Detecção simples de intenção → gerar filtros a partir da query + histórico + memória de sessão
+    const inferredFromQuery = this.inferFiltersFromQuery(request.query);
+    const inferredFromHistory = this.inferFiltersFromHistory(
+      request.history || []
+    );
+    let memoryFilters:
+      | {
+          surfaceType?: string;
+          roomType?: string;
+          finish?: string;
+          line?: string;
+        }
+      | undefined;
+    if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+      const snap = await RecommendationAgentWithMCP.sessionMemory.get(
+        request.sessionId
+      );
+      memoryFilters = snap?.filters;
+    }
+    const inferredFilters = {
+      ...(memoryFilters || {}),
+      ...inferredFromHistory,
+      ...inferredFromQuery,
+    };
     const effectiveContext = {
       ...(request.context || {}),
       filters: {
@@ -56,20 +92,45 @@ export class RecommendationAgentWithMCP {
       },
     };
 
+    // Determinar query efetiva em follow-ups: se o usuário pedir “mais opções”,
+    // usamos a última query persistida; se não houver, caímos para a query atual.
+    let effectiveQuery = request.query;
+    if (this.isFollowUpQuery(request.query)) {
+      if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+        const snap = await RecommendationAgentWithMCP.sessionMemory.get(
+          request.sessionId
+        );
+        if (snap?.lastQuery) {
+          effectiveQuery = snap.lastQuery;
+        } else {
+          // Sem lastQuery, usa apenas filtros (query vazia aumenta recall)
+          effectiveQuery = "";
+        }
+      }
+    }
+
     // Se MCP está habilitado e foi solicitado, orquestrar tools e aplicar RRF
     if (request.useMCP && this.mcpAdapter.isMCPEnabled()) {
       console.log("[RecommendationAgentWithMCP] Orquestrando tools via MCP");
 
-      // Estratégia: chamar ambas as tools em paralelo e fundir com RRF
+      // Estratégia: chamar ambas as tools com paginação leve (offset baseado na sessão)
+      let offset = 0;
+      if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+        const snap = await RecommendationAgentWithMCP.sessionMemory.get(
+          request.sessionId
+        );
+        offset = snap?.nextOffset || 0;
+      }
+
       const [filterRes, semanticRes] = await Promise.all([
         this.mcpAdapter.processRecommendation({
-          query: request.query,
-          context: effectiveContext,
+          query: effectiveQuery,
+          context: { ...effectiveContext, offset },
           tools: ["filter_search"],
         }),
         this.mcpAdapter.processRecommendation({
-          query: request.query,
-          context: effectiveContext,
+          query: effectiveQuery,
+          context: { ...effectiveContext, offset },
           tools: ["semantic_search"],
         }),
       ]);
@@ -87,6 +148,19 @@ export class RecommendationAgentWithMCP {
       );
 
       if (combined.length > 0) {
+        // Atualizar memória de sessão com filtros efetivos
+        if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+          await RecommendationAgentWithMCP.sessionMemory.set(
+            request.sessionId,
+            {
+              filters: effectiveContext.filters,
+              lastQuery: effectiveQuery,
+              lastPicks: combined.map((p) => ({ id: p.id, reason: p.reason })),
+              nextOffset: offset + 10,
+              lastUpdatedAt: Date.now(),
+            }
+          );
+        }
         return combined.map((p) => ({ id: p.id, reason: p.reason }));
       }
     }
@@ -152,6 +226,56 @@ export class RecommendationAgentWithMCP {
     else if (/(fosco completo)/.test(q)) filters.line = "Fosco Completo";
 
     return filters;
+  }
+
+  private inferFiltersFromHistory(
+    history: Array<{ role: "user" | "assistant"; content: string }>
+  ) {
+    const filters: any = {};
+    for (const msg of history) {
+      if (msg.role !== "user") continue;
+      const f = this.inferFiltersFromQuery(msg.content);
+      // Preferir menções mais recentes (sobrescreve)
+      Object.assign(filters, f);
+    }
+    return filters as {
+      surfaceType?: string;
+      roomType?: string;
+      finish?: string;
+      line?: string;
+    };
+  }
+
+  private isFollowUpQuery(query: string): boolean {
+    const q = query.toLowerCase();
+    return /(^|\s)(mostre|mostrar|mais opções|outras|ver mais|continue|próximas)(\s|$)/i.test(
+      q
+    );
+  }
+
+  private containsPaintKeywords(query: string): boolean {
+    const q = query.toLowerCase();
+    const keywords = [
+      "tinta",
+      "pintura",
+      "parede",
+      "teto",
+      "piso",
+      "banheiro",
+      "cozinha",
+      "sala",
+      "quarto",
+      "escritório",
+      "área externa",
+      "exterior",
+      "acabamento",
+      "fosco",
+      "semibrilho",
+      "acetinado",
+      "brilhante",
+      "lavável",
+    ];
+    return keywords.some((k) => q.includes(k));
   }
 
   private combineWithRRF(

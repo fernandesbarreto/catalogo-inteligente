@@ -32,11 +32,30 @@ function App() {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [sessionId, setSessionId] = useState<string>("");
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Ensure a persistent session id for chat memory
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("paint-chat-session");
+      if (stored) {
+        setSessionId(stored);
+      } else {
+        const id =
+          window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+        localStorage.setItem("paint-chat-session", id);
+        setSessionId(id);
+      }
+    } catch {
+      // Fallback non-persistent
+      if (!sessionId) setSessionId(`${Date.now()}-${Math.random()}`);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,14 +73,22 @@ function App() {
     setLoading(true);
 
     try {
+      // Build short history to send (last 10 messages)
+      const lastMessages = [...messages, userMessage].slice(-10);
+      const history = lastMessages.map((m) => ({
+        role: m.type === "user" ? "user" : "assistant",
+        content: m.content,
+      }));
+
       const response = await fetch(
         "http://localhost:3000/bff/ai/recommendations/mcp",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-session-id": sessionId || "",
           },
-          body: JSON.stringify({ query: inputValue.trim() }),
+          body: JSON.stringify({ query: inputValue.trim(), history }),
         }
       );
 

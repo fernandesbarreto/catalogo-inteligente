@@ -40,6 +40,9 @@ export class AiController {
         context: {
           filters: validatedQuery.filters,
         },
+        sessionId:
+          (req as any).session?.id || req.headers["x-session-id"]?.toString(),
+        history: (req.body && req.body.history) || [],
         useMCP: true,
       });
 
@@ -105,6 +108,9 @@ export class AiController {
         context: {
           filters: validatedQuery.filters,
         },
+        sessionId:
+          (req as any).session?.id || req.headers["x-session-id"]?.toString(),
+        history: (req.body && req.body.history) || [],
         useMCP: true,
       });
 
