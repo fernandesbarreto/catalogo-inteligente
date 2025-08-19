@@ -169,7 +169,9 @@ body {
 }
 
 @keyframes typing {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     transform: scale(0.8);
     opacity: 0.5;
   }
@@ -288,8 +290,6 @@ body {
   cursor: not-allowed;
 }
 
-
-
 /* Footer */
 .App-footer {
   background: rgba(0, 0, 0, 0.1);
@@ -365,4 +365,86 @@ body {
 
 .send-button:disabled {
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Palette image panel */
+.palette-panel {
+  max-width: 800px;
+  margin: 0 auto 2rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.palette-panel h3 {
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.palette-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.palette-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.palette-row label {
+  color: #fff;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.palette-row input[type="text"],
+.palette-row select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.color-inputs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.generate-btn {
+  background: #222;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.palette-error {
+  color: #ffdddd;
+  margin-top: 0.5rem;
+}
+.palette-meta {
+  color: #eee;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+}
+.palette-preview {
+  margin-top: 0.75rem;
+}
+.palette-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) {
+  .palette-row {
+    grid-template-columns: 1fr;
+  }
 }

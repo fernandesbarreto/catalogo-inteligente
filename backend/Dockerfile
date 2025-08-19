@@ -4,6 +4,9 @@ WORKDIR /app
 # Install OpenSSL for Prisma
 RUN apt-get update -y && apt-get install -y openssl
 
+# Install sharp dependencies
+RUN apt-get install -y libc6 libvips libvips-dev make g++ python3
+
 COPY package*.json ./
 RUN npm ci || true
 COPY . .

@@ -33,6 +33,19 @@ function App() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionId, setSessionId] = useState<string>("");
+  // Palette image panel state
+  const [sceneId, setSceneId] = useState("varanda/moderna-01");
+  const [hex, setHex] = useState("#5FA3D1");
+  const [finish, setFinish] = useState<
+    "" | "fosco" | "acetinado" | "semibrilho" | "brilhante"
+  >("");
+  const [size, setSize] = useState<"1024x1024" | "1024x768" | "768x1024">(
+    "1024x1024"
+  );
+  const [paletteLoading, setPaletteLoading] = useState(false);
+  const [paletteImage, setPaletteImage] = useState<string | null>(null);
+  const [paletteProvider, setPaletteProvider] = useState<string | null>(null);
+  const [paletteError, setPaletteError] = useState<string | null>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -148,6 +161,38 @@ function App() {
     }
   };
 
+  const handleGeneratePalette = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (paletteLoading) return;
+    setPaletteLoading(true);
+    setPaletteError(null);
+    setPaletteImage(null);
+    setPaletteProvider(null);
+    try {
+      const resp = await fetch("http://localhost:3000/bff/ai/palette-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneId,
+          hex,
+          finish: finish || undefined,
+          size,
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${txt}`);
+      }
+      const data = await resp.json();
+      setPaletteImage(data.imageBase64 || null);
+      setPaletteProvider(data.provider || null);
+    } catch (err: any) {
+      setPaletteError(err?.message || "Falha ao gerar imagem");
+    } finally {
+      setPaletteLoading(false);
+    }
+  };
+
   const exampleQueries = [
     "Preciso de uma tinta azul para quarto infantil",
     "Quero uma tinta branca para sala moderna",
@@ -247,6 +292,83 @@ function App() {
           </div>
         </div>
       </main>
+
+      {/* Palette Image Panel */}
+      <section className="palette-panel">
+        <h3>🖼️ Gerar imagem de parede pintada (direto no BFF)</h3>
+        <form className="palette-form" onSubmit={handleGeneratePalette}>
+          <div className="palette-row">
+            <label>
+              Cena (sceneId)
+              <input
+                type="text"
+                value={sceneId}
+                onChange={(e) => setSceneId(e.target.value)}
+                placeholder="varanda/moderna-01"
+              />
+            </label>
+            <label>
+              Cor (hex)
+              <div className="color-inputs">
+                <input
+                  type="color"
+                  value={hex}
+                  onChange={(e) => setHex(e.target.value)}
+                />
+                <input
+                  type="text"
+                  value={hex}
+                  onChange={(e) => setHex(e.target.value)}
+                  placeholder="#5FA3D1"
+                />
+              </div>
+            </label>
+          </div>
+          <div className="palette-row">
+            <label>
+              Acabamento
+              <select
+                value={finish}
+                onChange={(e) => setFinish(e.target.value as any)}
+              >
+                <option value="">(padrão)</option>
+                <option value="fosco">fosco</option>
+                <option value="acetinado">acetinado</option>
+                <option value="semibrilho">semibrilho</option>
+                <option value="brilhante">brilhante</option>
+              </select>
+            </label>
+            <label>
+              Tamanho
+              <select
+                value={size}
+                onChange={(e) => setSize(e.target.value as any)}
+              >
+                <option value="1024x1024">1024x1024</option>
+                <option value="1024x768">1024x768</option>
+                <option value="768x1024">768x1024</option>
+              </select>
+            </label>
+            <button
+              className="generate-btn"
+              type="submit"
+              disabled={paletteLoading}
+            >
+              {paletteLoading ? "Gerando..." : "Gerar imagem"}
+            </button>
+          </div>
+        </form>
+
+        {paletteError && <div className="palette-error">{paletteError}</div>}
+        {paletteProvider && (
+          <div className="palette-meta">provider: {paletteProvider}</div>
+        )}
+        {paletteImage && (
+          <div className="palette-preview">
+            <img src={paletteImage} alt="Paleta gerada" />
+          </div>
+        )}
+      </section>
 
       <footer className="App-footer">
         <p>Powered by MCP • Assistente Inteligente de Tintas</p>
