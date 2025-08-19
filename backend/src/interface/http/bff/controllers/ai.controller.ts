@@ -199,7 +199,7 @@ export class AiController {
           ).concat([{ role: "user", content: validatedQuery.query }]);
           const toolRes = await mcp.callTool({
             name: "chat",
-            arguments: { messages },
+            arguments: { messages, picks },
           });
           mcp.disconnect();
           const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");

@@ -9,6 +9,10 @@ export interface ChatMessage {
 
 export interface ChatToolInput {
   messages: ChatMessage[];
+  picks?: Array<{
+    id: string;
+    reason: string;
+  }>;
 }
 
 export interface ChatToolOutput {
@@ -82,6 +86,7 @@ function simpleHeuristicIntent(message: string) {
 
 export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
   const messages = input.messages || [];
+  const picks = input.picks || [];
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const userText = lastUser?.content || "";
 
@@ -133,6 +138,13 @@ export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
     decision = {
       reply: h.wantsImage
         ? "Claro! Vou gerar uma prévia aplicada na parede."
+        : picks.length > 0
+        ? `Encontrei ${
+            picks.length
+          } tinta(s) que podem ser adequadas para sua necessidade. ${picks
+            .slice(0, 2)
+            .map((p) => p.reason.split(" - ")[0])
+            .join(", ")} são boas opções.`
         : "Certo! Posso sugerir tintas ou gerar uma prévia se desejar.",
       generateImage: h.wantsImage,
       sceneId: h.sceneId,
