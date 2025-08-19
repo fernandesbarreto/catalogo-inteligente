@@ -234,25 +234,34 @@ export class SemanticSearchTool implements ISearchTool {
         return [];
       }
 
-      return validDocs.map((doc: any) => {
-        const metadata = doc.metadata || {};
-        const paintInfo = [
-          metadata.name,
-          metadata.color,
-          metadata.surfaceType,
-          metadata.roomType,
-          metadata.finish,
-        ]
-          .filter(Boolean)
-          .join(" - ");
+      // Paginação leve via offset (aplicada após ranking do retriever)
+      const offset = (filters as any)?.offset ?? 0;
+      const slice = validDocs.slice(offset, offset + 10);
 
-        return {
-          id: metadata.id, // Sempre usar ID real, nunca inventar
-          reason: `Semântico: ${
-            paintInfo || doc.pageContent.substring(0, 80)
-          }...`,
-        };
-      });
+      const exclude = ((filters as any)?.excludeIds as string[]) || [];
+      const excl = new Set(exclude);
+
+      return slice
+        .filter((doc: any) => !excl.has((doc.metadata || {}).id))
+        .map((doc: any) => {
+          const metadata = doc.metadata || {};
+          const paintInfo = [
+            metadata.name,
+            metadata.color,
+            metadata.surfaceType,
+            metadata.roomType,
+            metadata.finish,
+          ]
+            .filter(Boolean)
+            .join(" - ");
+
+          return {
+            id: metadata.id, // Sempre usar ID real, nunca inventar
+            reason: `Semântico: ${
+              paintInfo || doc.pageContent.substring(0, 80)
+            }...`,
+          };
+        });
     } catch (error) {
       console.error(`[SemanticSearchTool] Erro na busca semântica:`, error);
 

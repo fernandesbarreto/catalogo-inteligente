@@ -5,6 +5,9 @@ export interface SearchFilters {
   roomType?: string;
   finish?: string;
   line?: string;
+  offset?: number;
+  color?: string;
+  excludeIds?: string[];
 }
 
 export interface ISearchTool {
