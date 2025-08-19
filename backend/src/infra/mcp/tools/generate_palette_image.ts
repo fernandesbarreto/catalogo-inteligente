@@ -3,19 +3,16 @@ import path from "path";
 import sharp from "sharp";
 import { generatePaletteImageFast } from "./generate_palette_image_fast";
 import { GenInput, GenOutput } from "../../../domain/images/types";
-
-// Node 18+ já expõe fetch/Blob/FormData globalmente.
-// Se o seu runtime não expõe, instale `undici` e faça:
-// import { fetch, Blob, FormData } from "undici";
+import { hexToColorName } from "./hexToColor";
 
 const getAssetsDir = () =>
   process.env.ASSETS_SCENES_DIR ||
   path.resolve(__dirname, "../../../assets/scenes");
 
 function buildPrompt(hex: string, finish?: string) {
-  const finishText = finish ? ` (${finish})` : "";
-  // Prompt curto e objetivo; a máscara já define onde editar.
-  return `Pintar somente a área transparente (parede) com a cor ${hex}${finishText}. Preservar iluminação, textura e móveis. Sem textos/logos. Foto realista do mesmo ambiente.`;
+  return `Smooth and uniform paint, matte paint, solid color "${hexToColorName(
+    hex
+  )}", no stains, no additional texture, no additional elements.`;
 }
 
 export async function generatePaletteImage(
@@ -37,7 +34,6 @@ export async function generatePaletteImage(
     try {
       return await generateWithOpenAI(input);
     } catch (e) {
-      // fallback local se OpenAI falhar
       console.error("[OpenAI fallback to local]", e);
       return generatePaletteImageFast(input);
     }
@@ -95,20 +91,6 @@ async function normalizeMaskToAlpha(maskPath: string): Promise<Buffer> {
     .toBuffer();
 }
 
-// Garante que a máscara tenha as MESMAS dimensões do base
-async function ensureSameSize(
-  maskBuf: Buffer,
-  baseWidth: number,
-  baseHeight: number
-) {
-  const meta = await sharp(maskBuf).metadata();
-  if (meta.width === baseWidth && meta.height === baseHeight) return maskBuf;
-  return sharp(maskBuf)
-    .resize(baseWidth, baseHeight, { kernel: "nearest" })
-    .png()
-    .toBuffer();
-}
-
 async function alphaStats(pngWithAlpha: Buffer) {
   const { data, info } = await sharp(pngWithAlpha)
     .ensureAlpha()
@@ -128,8 +110,58 @@ async function alphaStats(pngWithAlpha: Buffer) {
   };
 }
 
-/** ------------------ STABILITY (Inpainting) ------------------ **/
+// ---------- Utils ----------
+async function buildStabilityMask(
+  maskPath: string,
+  invert = false
+): Promise<Buffer> {
+  // Se existir alpha “útil”, use-o para gerar PB: alpha 0 => branco (editar), alpha 255 => preto (preservar)
+  const { data, info } = await sharp(maskPath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true }); // RGBA
+  let minA = 255,
+    maxA = 0;
+  for (let i = 3; i < data.length; i += 4) {
+    const a = data[i];
+    if (a < minA) minA = a;
+    if (a > maxA) maxA = a;
+  }
+  const outL = Buffer.alloc(info.width * info.height); // 1 canal (L)
 
+  if (minA <= 5 && maxA >= 250) {
+    // Usa alpha existente
+    for (let i = 0, j = 0; j < outL.length; i += 4, j++) {
+      const a = data[i + 3];
+      const white = a <= 5 ? 255 : 0; // transparente => branco (editar)
+      outL[j] = invert ? 255 - white : white;
+    }
+  } else {
+    // Sem alpha útil → threshold pela luminância: escuro = parede
+    for (let i = 0, j = 0; j < outL.length; i += 4, j++) {
+      const r = data[i],
+        g = data[i + 1],
+        b = data[i + 2];
+      const lumin = (r + g + b) / 3;
+      const white = lumin < 128 ? 255 : 0;
+      outL[j] = invert ? 255 - white : white;
+    }
+  }
+
+  return sharp(outL, {
+    raw: { width: info.width, height: info.height, channels: 1 },
+  })
+    .png()
+    .toBuffer();
+}
+
+async function ensureSameSize(buf: Buffer, w: number, h: number) {
+  const meta = await sharp(buf).metadata();
+  if (meta.width === w && meta.height === h) return buf;
+  return sharp(buf).resize(w, h, { kernel: "nearest" }).png().toBuffer();
+}
+
+// ---------- Stability ----------
 async function generateWithStability(input: GenInput): Promise<GenOutput> {
   console.error(
     "[generateWithStability] input",
@@ -145,42 +177,47 @@ async function generateWithStability(input: GenInput): Promise<GenOutput> {
     throw new Error(`Scene not found or missing assets for '${sceneId}'`);
   }
 
-  const prompt = buildPrompt(hex, finish);
+  const prompt =
+    `Pintar somente a parede em ${hex}${finish ? ` (${finish})` : ""}. ` +
+    `Parede com pintura lisa e uniforme; preservar móveis, piso e luz; sem textos/logos.`;
+
   const sizeStr = size || "1024x1024";
 
-  // Base PNG (RGBA) e máscara normalizada
+  // Base RGBA
   const baseSharp = sharp(basePath).ensureAlpha();
   const baseMeta = await baseSharp.metadata();
   const basePng = await baseSharp.png().toBuffer();
 
-  let maskBuf = await normalizeMaskToAlpha(maskPath);
-  maskBuf = await ensureSameSize(maskBuf, baseMeta.width!, baseMeta.height!);
+  // Máscara PB (parede=BRANCO)
+  let maskGray = await buildStabilityMask(maskPath);
+  maskGray = await ensureSameSize(maskGray, baseMeta.width!, baseMeta.height!);
 
-  const { transparentPct, opaquePct } = await alphaStats(maskBuf);
-  console.error(
-    `[stability mask] transparent=${transparentPct.toFixed(
-      2
-    )}% opaque=${opaquePct.toFixed(2)}%`
-  );
-
-  // Monta multipart (Node 18+)
+  // Multipart (Node 18+: fetch/Blob/FormData nativos)
   const form = new FormData();
   form.append("image", new Blob([basePng], { type: "image/png" }), "image.png");
-  form.append("mask", new Blob([maskBuf], { type: "image/png" }), "mask.png");
+  form.append("mask", new Blob([maskGray], { type: "image/png" }), "mask.png");
   form.append("prompt", prompt);
   form.append("output_format", "png");
   form.append("size", sizeStr);
-  // Parâmetros opcionais (descomente e ajuste se quiser)
-  // form.append("cfg_scale", "6");        // força/aderência ao prompt (3–15)
-  // form.append("steps", "35");           // passos de difusão
-  // form.append("seed", (input.seed ?? 0).toString());
-  // form.append("negative_prompt", "text, watermark, logo, extra objects");
+
+  // —— parâmetros que aumentam a obediência ao prompt ——
+  // Ajuste conforme seu gosto/ambiente:
+  form.append("cfg_scale", process.env.STABILITY_CFG_SCALE ?? "10"); // 8–12 = bom
+  // form.append("steps",     process.env.STABILITY_STEPS     ?? "35");
+  // form.append("seed",      (input.seed ?? "").toString());
+  form.append("negative_prompt", "text, watermark, logo, pattern, graffiti");
+
+  // **fundamental**: diga de onde vem a máscara
+  form.append("mask_source", "MASK_IMAGE_WHITE"); // BRANCO = editar (inpaint)
 
   const resp = await fetch(
     "https://api.stability.ai/v2beta/stable-image/edit/inpaint",
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.STABILITY_API_KEY!}` },
+      headers: {
+        Authorization: `Bearer ${process.env.STABILITY_API_KEY!}`,
+        Accept: "image/*", // como no exemplo oficial
+      },
       body: form,
     }
   );
@@ -190,7 +227,6 @@ async function generateWithStability(input: GenInput): Promise<GenOutput> {
     throw new Error(`stability_error: ${resp.status} ${text}`);
   }
 
-  // Se voltar JSON, é erro/aviso; normal é binário (image/png)
   const ct = resp.headers.get("content-type") || "";
   if (ct.includes("application/json")) {
     const j = await resp.json();
