@@ -3,6 +3,7 @@ import {
   IPaintRepo,
   CreatePaintDTO,
   UpdatePaintDTO,
+  PaginatedResult,
 } from "../../../domain/repositories/IPaintRepo";
 
 export class PaintRepoPrisma implements IPaintRepo {
@@ -31,7 +32,7 @@ export class PaintRepoPrisma implements IPaintRepo {
     return p ?? null;
   }
 
-  async list(skip: number, take: number, q?: string) {
+  async list(skip: number, take: number, q?: string): Promise<PaginatedResult<{ id: string } & CreatePaintDTO>> {
     const where = q
       ? {
           OR: [
@@ -46,12 +47,27 @@ export class PaintRepoPrisma implements IPaintRepo {
           ],
         }
       : {};
-    return this.prisma.paint.findMany({
-      where,
-      skip,
-      take,
-      orderBy: { createdAt: "desc" },
-    });
+
+    const [data, total] = await Promise.all([
+      this.prisma.paint.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.paint.count({ where }),
+    ]);
+
+    const page = Math.floor(skip / take) + 1;
+    const totalPages = Math.ceil(total / take);
+
+    return {
+      data,
+      total,
+      page,
+      pageSize: take,
+      totalPages,
+    };
   }
 
   async update(id: string, data: UpdatePaintDTO) {

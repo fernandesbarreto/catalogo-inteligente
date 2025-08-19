@@ -12,6 +12,7 @@ export class ListPaints {
     q?: string;
   }) {
     const skip = (page - 1) * pageSize;
-    return this.paints.list(skip, pageSize, q);
+    const result = await this.paints.list(skip, pageSize, q);
+    return result;
   }
 }
