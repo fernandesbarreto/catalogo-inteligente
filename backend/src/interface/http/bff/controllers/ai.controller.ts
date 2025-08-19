@@ -79,7 +79,12 @@ export class AiController {
       routerActions.some((a: any) => a?.tool === "Geração de imagem") ||
       this.isPaletteImageIntent(userMessage);
 
-    if (wantsImage && picks.length > 0) {
+    // Verificar se é apenas geração de imagem (sem busca de produtos)
+    const imageOnly =
+      routerActions.length === 1 &&
+      routerActions[0]?.tool === "Geração de imagem";
+
+    if (wantsImage) {
       // Chamar tool chat para gerar imagem + resposta
       const mcp = new MCPClient(
         process.env.MCP_COMMAND || "npm",
@@ -88,19 +93,74 @@ export class AiController {
           : ["run", "mcp"]) as string[]
       );
       await mcp.connect();
-      const toolRes = await mcp.callTool({
-        name: "chat",
-        arguments: {
-          messages: [...history, { role: "user", content: userMessage }],
-          picks: response.picks,
-        },
-      });
-      mcp.disconnect();
+
+      let toolRes: any;
+      try {
+        if (imageOnly) {
+          // Extrair cor da mensagem do usuário
+          const hex = this.extractColorFromMessage(userMessage);
+
+          // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
+          toolRes = await Promise.race([
+            mcp.callTool({
+              name: "generate_palette_image",
+              arguments: {
+                sceneId: "varanda/moderna-01",
+                hex: hex,
+                size: "1024x1024",
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error("Timeout na geração de imagem")),
+                60000
+              )
+            ),
+          ]);
+        } else {
+          // Se há produtos + imagem, usar o chat
+          toolRes = await Promise.race([
+            mcp.callTool({
+              name: "chat",
+              arguments: {
+                messages: [...history, { role: "user", content: userMessage }],
+                picks: response.picks,
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Timeout no chat")), 30000)
+            ),
+          ]);
+        }
+      } finally {
+        mcp.disconnect();
+      }
 
       const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
-      response.message = payload?.reply || "";
-      if (payload?.image?.imageBase64) {
-        response.paletteImage = payload.image;
+      const imageBase64 =
+        payload?.image?.imageBase64 ?? payload?.imageBase64 ?? null;
+
+      const provider =
+        payload?.image?.provider ?? payload?.provider ?? undefined;
+
+      const promptUsed =
+        payload?.image?.promptUsed ?? payload?.promptUsed ?? undefined;
+
+      const seed = payload?.image?.seed ?? payload?.seed ?? undefined;
+
+      response.message = (payload?.reply || response.message || "").trim();
+      if (!response.message) {
+        response.message =
+          "Pronto! Gerei a prévia com a parede pintada. Quer ajustar cena, acabamento ou tom?";
+      }
+
+      if (imageBase64) {
+        response.paletteImage = {
+          imageBase64,
+          provider,
+          promptUsed,
+          seed,
+        };
         response.imageIntent = true;
       }
     } else {
@@ -130,6 +190,9 @@ export class AiController {
 
       // 1. Análise de intenção (internamente)
       const routerActions = await this.analyzeIntent(userMessage, history);
+      console.log(
+        `\n\n\nrouterActions: ${JSON.stringify(routerActions)}\n\n\n`
+      );
 
       // 2. Execução das tools recomendadas
       const result = await this.executeTools(
@@ -215,6 +278,158 @@ export class AiController {
       /\b(gerar|gere|mostrar|ver)\b.*\b(imagem|foto)\b/.test(q) ||
       /\b(preview|paleta|aplicar cor|pintar parede)\b/.test(q)
     );
+  }
+
+  private mapColorToHex(colorName: string): string {
+    const colorMap: Record<string, string> = {
+      branco: "#FFFFFF",
+      branca: "#FFFFFF",
+      white: "#FFFFFF",
+      preto: "#000000",
+      preta: "#000000",
+      black: "#000000",
+      cinza: "#737373",
+      gray: "#737373",
+      grey: "#737373",
+      azul: "#1D39C9",
+      blue: "#1D39C9",
+      vermelho: "#D14747",
+      red: "#D14747",
+      verde: "#61D161",
+      green: "#61D161",
+      amarelo: "#F4D125",
+      yellow: "#F4D125",
+      rosa: "#CE7EA6",
+      pink: "#CE7EA6",
+      marrom: "#93591F",
+      brown: "#93591F",
+      laranja: "#EC7F13",
+      orange: "#EC7F13",
+      bege: "#E2CD9C",
+      beige: "#E2CD9C",
+      roxo: "#AF25F4",
+      purple: "#AF25F4",
+      violeta: "#AF25F4",
+      violet: "#AF25F4",
+      turquesa: "#47D1AF",
+      turquoise: "#47D1AF",
+      coral: "#DD673C",
+      salmão: "#DD673C",
+      salmon: "#DD673C",
+      dourado: "#D1BE61",
+      gold: "#D1BE61",
+      prateado: "#737373",
+      silver: "#737373",
+      vinho: "#C91D73",
+      wine: "#C91D73",
+      burgundy: "#C91D73",
+      jade: "#1F9346",
+      aqua: "#96E9E2",
+      ciano: "#1F9393",
+      teal: "#1F9393",
+      lima: "#C0F425",
+      lime: "#C0F425",
+      oliva: "#93761F",
+      olive: "#93761F",
+      âmbar: "#ECB613",
+      amber: "#ECB613",
+      mostarda: "#C6AF53",
+      mustard: "#C6AF53",
+      fúcsia: "#EC13DA",
+      fuchsia: "#EC13DA",
+      anil: "#7E8BCE",
+      indigo: "#7E8BCE",
+      céu: "#96C6E9",
+      sky: "#96C6E9",
+      "light blue": "#96C6E9",
+      "azul claro": "#96C6E9",
+      "azul escuro": "#1D39C9",
+      "dark blue": "#1D39C9",
+      "verde claro": "#61D161",
+      "light green": "#61D161",
+      "verde escuro": "#1F9346",
+      "dark green": "#1F9346",
+      "vermelho claro": "#D14747",
+      "light red": "#D14747",
+      "vermelho escuro": "#C91D73",
+      "dark red": "#C91D73",
+    };
+
+    const normalizedColor = colorName.toLowerCase().trim();
+    return colorMap[normalizedColor] || "#5FA3D1"; // fallback para azul médio
+  }
+
+  private extractColorFromMessage(message: string): string {
+    const colorKeywords = [
+      "branco",
+      "branca",
+      "white",
+      "preto",
+      "preta",
+      "black",
+      "cinza",
+      "gray",
+      "grey",
+      "azul",
+      "blue",
+      "vermelho",
+      "red",
+      "verde",
+      "green",
+      "amarelo",
+      "yellow",
+      "rosa",
+      "pink",
+      "marrom",
+      "brown",
+      "laranja",
+      "orange",
+      "bege",
+      "beige",
+      "roxo",
+      "purple",
+      "violeta",
+      "violet",
+      "turquesa",
+      "turquoise",
+      "coral",
+      "salmão",
+      "salmon",
+      "dourado",
+      "gold",
+      "prateado",
+      "silver",
+      "vinho",
+      "wine",
+      "burgundy",
+      "jade",
+      "aqua",
+      "ciano",
+      "teal",
+      "lima",
+      "lime",
+      "oliva",
+      "olive",
+      "âmbar",
+      "amber",
+      "mostarda",
+      "mustard",
+      "fúcsia",
+      "fuchsia",
+      "anil",
+      "indigo",
+      "céu",
+      "sky",
+    ];
+
+    const messageLower = message.toLowerCase();
+    for (const color of colorKeywords) {
+      if (messageLower.includes(color)) {
+        return this.mapColorToHex(color);
+      }
+    }
+
+    return "#5FA3D1"; // fallback para azul médio
   }
 
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {

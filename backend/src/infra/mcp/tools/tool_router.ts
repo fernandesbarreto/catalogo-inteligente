@@ -247,6 +247,7 @@ export async function toolRouter(
       combined
     );
 
+  // Only do filter search if user explicitly wants products
   if (hasExplicit && wantsProducts) {
     const args: Record<string, any> = {
       query: sanitizeString(builtQuery) || "",
@@ -313,6 +314,16 @@ export async function toolRouter(
       rationale:
         "Usuário pediu para visualizar/aplicar cor em cena; parâmetros normalizados.",
     });
+  }
+
+  // If user explicitly wants image generation, prioritize it over product search
+  if (wantsImageGeneration(combined) && actions.length > 1) {
+    // Keep only image generation if user explicitly asked for it
+    const imageAction = actions.find((a) => a.tool === "Geração de imagem");
+    if (imageAction) {
+      actions.length = 0;
+      actions.push(imageAction);
+    }
   }
 
   // If both retrieval and visualization help, ensure retrieval comes first
