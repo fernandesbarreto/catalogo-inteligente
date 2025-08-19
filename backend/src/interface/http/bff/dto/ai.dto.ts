@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+export const ChatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1, "Conteúdo é obrigatório"),
+});
+
 export const RecommendationQuerySchema = z.object({
   query: z.string().min(1, "Query é obrigatória"),
   filters: z
@@ -10,6 +15,7 @@ export const RecommendationQuerySchema = z.object({
       line: z.string().optional(),
     })
     .optional(),
+  history: z.array(ChatMessageSchema).optional(),
 });
 
 export const RecommendationPickSchema = z.object({
@@ -27,3 +33,4 @@ export type RecommendationResponse = z.infer<
   typeof RecommendationResponseSchema
 >;
 export type RecommendationPick = z.infer<typeof RecommendationPickSchema>;
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;

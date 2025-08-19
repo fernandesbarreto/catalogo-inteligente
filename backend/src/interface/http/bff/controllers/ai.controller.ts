@@ -105,6 +105,7 @@ export class AiController {
       const validatedQuery = RecommendationQuerySchema.parse(req.body);
 
       console.log(`[AiController] Recebida recomendação MCP:`, validatedQuery);
+      console.log(`history: ${JSON.stringify(req.body.history)}`);
 
       const agent = await this.getRecommendationAgent();
       const result = await agent.recommend({
@@ -304,7 +305,8 @@ Regras:
 
   const user = `Pedido do usuário: "${query}"
 Opções (JSON):
-${JSON.stringify(picks.slice(0, 5), null, 2)}`;
+${JSON.stringify(picks.slice(0, 5), null, 2)}
+Observação: Se o usuário pedir mais opções, continue no mesmo contexto anterior.`;
 
   const chat = makeChat();
   const resp = await chat.invoke([

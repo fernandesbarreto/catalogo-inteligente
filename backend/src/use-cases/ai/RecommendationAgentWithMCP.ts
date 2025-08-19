@@ -103,8 +103,11 @@ export class RecommendationAgentWithMCP {
         if (snap?.lastQuery) {
           effectiveQuery = snap.lastQuery;
         } else {
-          // Sem lastQuery, usa apenas filtros (query vazia aumenta recall)
-          effectiveQuery = "";
+          // Sem lastQuery na memória, tenta extrair a última pergunta não-follow-up do histórico
+          const fromHistory = this.findLastNonFollowUpUserQuery(
+            request.history || []
+          );
+          effectiveQuery = fromHistory ?? "";
         }
       }
     }
@@ -251,6 +254,19 @@ export class RecommendationAgentWithMCP {
     return /(^|\s)(mostre|mostrar|mais opções|outras|ver mais|continue|próximas)(\s|$)/i.test(
       q
     );
+  }
+
+  private findLastNonFollowUpUserQuery(
+    history: Array<{ role: "user" | "assistant"; content: string }>
+  ): string | undefined {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const m = history[i];
+      if (m.role !== "user") continue;
+      if (!this.isFollowUpQuery(m.content)) {
+        return m.content.trim();
+      }
+    }
+    return undefined;
   }
 
   private containsPaintKeywords(query: string): boolean {

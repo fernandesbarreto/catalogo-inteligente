@@ -234,7 +234,11 @@ export class SemanticSearchTool implements ISearchTool {
         return [];
       }
 
-      return validDocs.map((doc: any) => {
+      // Paginação leve via offset (aplicada após ranking do retriever)
+      const offset = (filters as any)?.offset ?? 0;
+      const slice = validDocs.slice(offset, offset + 10);
+
+      return slice.map((doc: any) => {
         const metadata = doc.metadata || {};
         const paintInfo = [
           metadata.name,

@@ -19,6 +19,7 @@ export class FilterSearchTool implements ISearchTool {
     });
 
     const where: any = {};
+    const offset = (filters as any)?.offset ?? 0;
 
     // Aplicar filtros específicos no SQL quando existirem
     if (filters?.surfaceType) {
@@ -141,6 +142,7 @@ export class FilterSearchTool implements ISearchTool {
     const paints = await this.prisma.paint.findMany({
       where,
       take: 10,
+      skip: offset,
       orderBy: { createdAt: "desc" },
     });
 
