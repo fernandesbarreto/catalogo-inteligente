@@ -22,6 +22,143 @@ export class AiController {
     return this.semanticSearchTool;
   }
 
+  private async analyzeIntent(userMessage: string, history: any[]) {
+    // Usar o tool_router internamente
+    const summary = history
+      .slice(-8)
+      .map((m) => `${m.role}: ${m.content}`)
+      .join(" \n ")
+      .slice(0, 600);
+
+    const mcp = new MCPClient(
+      process.env.MCP_COMMAND || "npm",
+      (process.env.MCP_ARGS
+        ? process.env.MCP_ARGS.split(" ")
+        : ["run", "mcp"]) as string[]
+    );
+
+    await mcp.connect();
+    const result = await mcp.callTool({
+      name: "tool_router",
+      arguments: { userMessage, conversationSummary: summary },
+    });
+    mcp.disconnect();
+
+    const payload = JSON.parse(result.content?.[0]?.text || "{}");
+    return Array.isArray(payload?.actions) ? payload.actions : [];
+  }
+
+  private async executeTools(
+    userMessage: string,
+    history: any[],
+    routerActions: any[],
+    sessionId?: string
+  ) {
+    const agent = await this.getRecommendationAgent();
+
+    return await agent.recommend({
+      query: userMessage,
+      context: { filters: {} },
+      sessionId,
+      history,
+      useMCP: true,
+      routerActions,
+    });
+  }
+
+  private async generateResponse(
+    userMessage: string,
+    history: any[],
+    picks: any[],
+    routerActions: any[]
+  ) {
+    const response: any = {
+      picks: picks.map((pick) => ({ id: pick.id, reason: pick.reason })),
+      message: "",
+    };
+
+    // Verificar se precisa gerar imagem
+    const wantsImage =
+      routerActions.some((a: any) => a?.tool === "Geração de imagem") ||
+      this.isPaletteImageIntent(userMessage);
+
+    if (wantsImage && picks.length > 0) {
+      // Chamar tool chat para gerar imagem + resposta
+      const mcp = new MCPClient(
+        process.env.MCP_COMMAND || "npm",
+        (process.env.MCP_ARGS
+          ? process.env.MCP_ARGS.split(" ")
+          : ["run", "mcp"]) as string[]
+      );
+      await mcp.connect();
+      const toolRes = await mcp.callTool({
+        name: "chat",
+        arguments: {
+          messages: [...history, { role: "user", content: userMessage }],
+          picks: response.picks,
+        },
+      });
+      mcp.disconnect();
+
+      const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
+      response.message = payload?.reply || "";
+      if (payload?.image?.imageBase64) {
+        response.paletteImage = payload.image;
+        response.imageIntent = true;
+      }
+    } else {
+      // Resposta simples sem imagem
+      response.message = await this.formatPicksAsNaturalMessage(
+        userMessage,
+        response.picks
+      );
+    }
+
+    return response;
+  }
+
+  async chatUnified(req: Request, res: Response) {
+    try {
+      const userMessage = (req.body?.userMessage || "").toString();
+      const history = (req.body?.history || []) as Array<{
+        role: "user" | "assistant";
+        content: string;
+      }>;
+
+      if (!userMessage || typeof userMessage !== "string") {
+        return res.status(400).json({
+          error: "userMessage obrigatório",
+        });
+      }
+
+      // 1. Análise de intenção (internamente)
+      const routerActions = await this.analyzeIntent(userMessage, history);
+
+      // 2. Execução das tools recomendadas
+      const result = await this.executeTools(
+        userMessage,
+        history,
+        routerActions,
+        req.headers["x-session-id"]?.toString()
+      );
+
+      // 3. Geração de resposta natural
+      const response = await this.generateResponse(
+        userMessage,
+        history,
+        result,
+        routerActions
+      );
+
+      return res.json(response);
+    } catch (error) {
+      console.error("[AiController] chatUnified error", error);
+      return res.status(500).json({
+        error: "internal_error",
+      });
+    }
+  }
+
   async routeWithMCP(req: Request, res: Response) {
     try {
       const userMessage = (req.body?.userMessage || "").toString();

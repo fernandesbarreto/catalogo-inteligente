@@ -83,39 +83,18 @@ function App() {
         content: m.content,
       }));
 
-      // 1) Call router first so backend decides which tools to run
-      const routerRes = await fetch("http://localhost:3000/bff/ai/router", {
+      // Substituir as 2 chamadas por:
+      const response = await fetch("http://localhost:3000/bff/ai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-session-id": sessionId || "",
         },
-        body: JSON.stringify({ userMessage: userMessage.content, history }),
+        body: JSON.stringify({
+          userMessage: userMessage.content,
+          history,
+        }),
       });
-      // We do not block on router failure; continue to main request
-      let routerActions: any[] = [];
-      try {
-        if (routerRes.ok) {
-          const r = await routerRes.json();
-          if (Array.isArray(r?.actions)) routerActions = r.actions;
-        }
-      } catch {}
-
-      const response = await fetch(
-        "http://localhost:3000/bff/ai/recommendations",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-session-id": sessionId || "",
-          },
-          body: JSON.stringify({
-            query: inputValue.trim(),
-            history,
-            routerActions,
-          }),
-        }
-      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
