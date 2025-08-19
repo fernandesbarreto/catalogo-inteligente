@@ -91,64 +91,50 @@ export class AiController {
         id: pick.id,
         reason: pick.reason,
       }));
-      // Natural language via LLM (fallback para template se falhar)
+      // Mensagem via MCP chat tool: decide se gera imagem e retorna no chat
       const response = {
         picks,
         notes: `Encontradas ${result.length} tintas usando MCP.`,
-        message: await this.formatWithLLM(validatedQuery.query, picks).catch(
-          () => this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
-        ),
       } as any;
 
-      // Intent: gerar imagem de paleta no chat, sob demanda explícita
-      if (this.isPaletteImageIntent(validatedQuery.query)) {
-        try {
-          const { sceneId, hex, finish, size } =
-            await this.resolvePaletteInputs(validatedQuery.query);
-          let out: { imageBase64: string; provider: string } | null = null;
-          const startedAt = Date.now();
-          if (
-            (process.env.IMAGE_PROVIDER || "local").toLowerCase() === "local"
-          ) {
-            const { generatePaletteImageFast } = await import(
-              "../../../../infra/mcp/tools/generate_palette_image_fast"
-            );
-            const r = await generatePaletteImageFast({
-              sceneId,
-              hex,
-              finish,
-              size,
-            });
-            out = { imageBase64: r.imageBase64, provider: r.provider };
-          } else {
-            const { generatePaletteImage } = await import(
-              "../../../../infra/mcp/tools/generate_palette_image"
-            );
-            const r = await generatePaletteImage({
-              sceneId,
-              hex,
-              finish,
-              size,
-            });
-            out = { imageBase64: r.imageBase64, provider: r.provider };
-          }
-          const ms = Date.now() - startedAt;
-          console.log(
-            `[AiController] palette-image generated {sceneId:${sceneId}, hex:${hex}, provider:${out?.provider}, ms:${ms}}`
+      try {
+        const mcp = new MCPClient(
+          process.env.MCP_COMMAND || "npm",
+          (process.env.MCP_ARGS
+            ? process.env.MCP_ARGS.split(" ")
+            : ["run", "mcp"]) as string[]
+        );
+        await mcp.connect();
+        const messages = ([...(validatedQuery.history || [])] as any[]).concat([
+          { role: "user", content: validatedQuery.query },
+        ]);
+        const toolRes = await mcp.callTool({
+          name: "chat",
+          arguments: { messages },
+        });
+        mcp.disconnect();
+        const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
+        if (payload?.reply) {
+          (response as any).message = payload.reply;
+        } else {
+          (response as any).message = await this.formatWithLLM(
+            validatedQuery.query,
+            picks
+          ).catch(() =>
+            this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
           );
-          if (out) {
-            (response as any).paletteImage = {
-              imageBase64: out.imageBase64,
-              provider: out.provider,
-              sceneId,
-              hex,
-              finish,
-              size,
-            };
-          }
-        } catch (e) {
-          console.error(`[AiController] palette-image intent failed:`, e);
         }
+        if (payload?.image?.imageBase64) {
+          (response as any).paletteImage = payload.image;
+        }
+      } catch (e) {
+        console.error(`[AiController] MCP chat fallback to LLM:`, e);
+        (response as any).message = await this.formatWithLLM(
+          validatedQuery.query,
+          picks
+        ).catch(() =>
+          this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+        );
       }
 
       console.log(`[AiController] Recomendação retornada:`, {

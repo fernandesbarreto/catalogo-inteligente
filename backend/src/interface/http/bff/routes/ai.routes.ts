@@ -7,6 +7,6 @@ const ctrl = new AiController();
 r.post("/recommendations", (req, res) => ctrl.recommend(req, res));
 r.post("/search", (req, res) => ctrl.semanticSearch(req, res));
 r.post("/recommendations/mcp", (req, res) => ctrl.recommendWithMCP(req, res));
-r.post("/palette-image", (req, res) => ctrl.generatePaletteImage(req, res));
+// Desabilitado: geração de imagem agora só via MCP chat tool
 
 export default r;

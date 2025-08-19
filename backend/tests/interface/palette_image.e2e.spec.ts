@@ -31,23 +31,23 @@ async function setupScenes() {
   await fs.promises.writeFile(path.join(sceneDir, "mask.png"), maskImg);
 }
 
-describe("POST /bff/ai/palette-image (local)", () => {
+describe("POST /bff/ai/recommendations with chat MCP image (local)", () => {
   beforeAll(async () => {
     await setupScenes();
     process.env.ASSETS_SCENES_DIR = TMP_DIR;
     process.env.IMAGE_PROVIDER = "local";
   });
 
-  it("returns 200 and base64 image", async () => {
+  it("returns 200 and base64 image inside chat response when prompt asks image", async () => {
     const app = makeApp();
-    const res = await request(app)
-      .post("/bff/ai/palette-image")
-      .send({
-        sceneId: "varanda/moderna-01",
-        hex: "#3366FF",
-        size: "1024x1024",
-      });
+    const res = await request(app).post("/bff/ai/recommendations").send({
+      query:
+        "Mostre uma imagem prévia com a parede pintada na cena varanda/moderna-01 em #3366FF",
+      history: [],
+    });
     expect(res.status).toBe(200);
-    expect(res.body.imageBase64).toMatch(/^data:image\/png;base64,/);
+    expect(res.body.paletteImage.imageBase64).toMatch(
+      /^data:image\/png;base64,/
+    );
   }, 15000);
 });
