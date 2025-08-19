@@ -22,6 +22,12 @@ export interface RecommendationRequest {
     role: "user" | "assistant";
     content: string;
   }>;
+  routerActions?: Array<{
+    tool?: string;
+    args?: Record<string, any>;
+    confidence?: number;
+    rationale?: string;
+  }>;
 }
 
 export class RecommendationAgentWithMCP {
@@ -36,25 +42,15 @@ export class RecommendationAgentWithMCP {
     // Tentar habilitar MCP se disponível
     try {
       await this.mcpAdapter.enable();
-      console.log("[RecommendationAgentWithMCP] MCP habilitado com sucesso");
-    } catch (error) {
-      console.log(
-        "[RecommendationAgentWithMCP] MCP não disponível, usando fallback"
-      );
-    }
+    } catch (error) {}
     if (!RecommendationAgentWithMCP.sessionMemory) {
       RecommendationAgentWithMCP.sessionMemory = await createSessionMemory();
-      console.log("[RecommendationAgentWithMCP] Session memory initialized");
     }
   }
 
   async recommend(
     request: RecommendationRequest
   ): Promise<RecommendationPick[]> {
-    console.log(
-      `[RecommendationAgentWithMCP] Processando recomendação: "${request.query}"`
-    );
-
     // Garantir MCP habilitado se solicitado
     if (request.useMCP && !this.mcpAdapter.isMCPEnabled()) {
       await this.initialize();
@@ -114,47 +110,59 @@ export class RecommendationAgentWithMCP {
 
     // Se MCP está habilitado e foi solicitado, orquestrar tools e aplicar RRF
     if (request.useMCP && this.mcpAdapter.isMCPEnabled()) {
-      console.log("[RecommendationAgentWithMCP] Orquestrando tools via MCP");
-
-      // Estratégia: chamar ambas as tools com paginação leve (offset baseado na sessão)
+      // Estratégia: usar routerActions quando disponíveis; caso contrário, chamar ambas as tools com paginação leve (offset baseado na sessão)
       let offset = 0;
-      if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
-        const snap = await RecommendationAgentWithMCP.sessionMemory.get(
-          request.sessionId
-        );
-        offset = snap?.nextOffset || 0;
+      if (request.sessionId) {
+        offset = parseInt(request.sessionId.slice(-2), 16) % 20;
       }
 
-      // Construir excludeIds com base no visto na sessão
-      const seenIds: string[] = (
-        request.sessionId && RecommendationAgentWithMCP.sessionMemory
-          ? (
-              await RecommendationAgentWithMCP.sessionMemory.get(
-                request.sessionId
-              )
-            )?.seenIds || []
-          : []
-      ) as string[];
+      let filterRes: any = null;
+      let semanticRes: any = null;
 
-      const [filterRes, semanticRes] = await Promise.all([
-        this.mcpAdapter.processRecommendation({
-          query: effectiveQuery,
-          context: { ...effectiveContext, offset, excludeIds: seenIds },
-          tools: ["filter_search"],
-        }),
-        this.mcpAdapter.processRecommendation({
-          query: effectiveQuery,
-          context: { ...effectiveContext, offset, excludeIds: seenIds },
-          tools: ["semantic_search"],
-        }),
-      ]);
+      if (request.routerActions && request.routerActions.length > 0) {
+        // Use router guidance
+        const wantsFilter = request.routerActions.some(
+          (a) => a?.tool === "Procurar tinta no Prisma por filtro"
+        );
+        const wantsSemantic = request.routerActions.some(
+          (a) => a?.tool === "Busca semântica de tinta nos embeddings"
+        );
+
+        if (wantsFilter) {
+          filterRes = await this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["filter_search"],
+          });
+        }
+
+        if (wantsSemantic) {
+          semanticRes = await this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["semantic_search"],
+          });
+        }
+      } else {
+        // Fallback: call both tools
+        const [filterResTemp, semanticResTemp] = await Promise.all([
+          this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["filter_search"],
+          }),
+          this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["semantic_search"],
+          }),
+        ]);
+        filterRes = filterResTemp;
+        semanticRes = semanticResTemp;
+      }
 
       const filterPicks = filterRes?.picks ?? [];
       const semanticPicks = semanticRes?.picks ?? [];
-
-      console.log(
-        `[RecommendationAgentWithMCP] filter: ${filterPicks.length}, semantic: ${semanticPicks.length}`
-      );
 
       // Evitar repetição: filtrar IDs já vistos na sessão
       let combined = this.combineWithRRF(filterPicks, semanticPicks);
@@ -197,9 +205,6 @@ export class RecommendationAgentWithMCP {
     }
 
     // Fallback: nenhum resultado
-    console.log(
-      "[RecommendationAgentWithMCP] Sem resultados após orquestração (MCP)."
-    );
     return [];
   }
 

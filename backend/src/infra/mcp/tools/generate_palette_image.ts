@@ -178,9 +178,9 @@ async function generateWithStability(input: GenInput): Promise<GenOutput> {
   }
 
   const prompt =
-    `Pintar somente a parede em ${hex}${finish ? ` (${finish})` : ""}. ` +
-    `Parede com pintura lisa e uniforme; preservar móveis, piso e luz; sem textos/logos.`;
-
+    `Paint only the wall in ${hex}${finish ? ` (${finish})` : ""}. ` +
+    `Wall with smooth and uniform paint; preserve furniture, floor and lighting; no text/logos.`;
+  console.log(`\n\n\nprompt: ${prompt}\n\n\n`);
   const sizeStr = size || "1024x1024";
 
   // Base RGBA

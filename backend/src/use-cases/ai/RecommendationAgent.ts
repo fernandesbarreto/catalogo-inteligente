@@ -155,21 +155,6 @@ export class RecommendationAgent {
     const combinedArray = Array.from(combinedMap.values());
     combinedArray.sort((a, b) => (b.rrfScore || 0) - (a.rrfScore || 0));
 
-    console.log(
-      `[RecommendationAgent] RRF combinou ${filterPicks.length} filtros + ${semanticPicks.length} semânticos = ${combinedArray.length} únicos`
-    );
-
-    // Log dos top 3 scores para debug
-    combinedArray.slice(0, 3).forEach((pick, index) => {
-      console.log(
-        `[RecommendationAgent] Top ${index + 1}: ID ${
-          pick.id
-        }, Score ${pick.rrfScore?.toFixed(4)}, Filter: ${
-          pick.filterRank || "N/A"
-        }, Semantic: ${pick.semanticRank || "N/A"}`
-      );
-    });
-
     return combinedArray;
   }
 
@@ -204,12 +189,5 @@ export class RecommendationAgent {
     }
 
     return `Encontradas ${resultCount} tintas. Para mais opções, refine sua consulta.`;
-  }
-
-  // Método mantido para compatibilidade, mas não usado mais
-  private shouldUseSemanticSearch(query: string): boolean {
-    // Este método não é mais usado na abordagem híbrida
-    // Mantido apenas para compatibilidade
-    return false;
   }
 }

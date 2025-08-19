@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { RecommendationQuerySchema } from "../dto/ai.dto";
 import { RecommendationAgentWithMCP } from "../../../../use-cases/ai/RecommendationAgentWithMCP";
-import { FilterSearchTool } from "../../../../infra/search/FilterSearchTool";
 import { SemanticSearchTool } from "../../../../infra/search/SemanticSearchTool";
 import { ZodError } from "zod";
 import { makeChat } from "../../../../infra/ai/llm/OpenAIChat";
@@ -11,7 +10,6 @@ import { GenInput } from "../../../../domain/images/types";
 
 export class AiController {
   private readonly prisma = new PrismaClient();
-  private readonly filterSearchTool = new FilterSearchTool(this.prisma);
   private semanticSearchTool: SemanticSearchTool | null = null;
   private recommendationAgent: RecommendationAgentWithMCP | null = null;
 
@@ -22,41 +20,416 @@ export class AiController {
     return this.semanticSearchTool;
   }
 
+  private async analyzeIntent(userMessage: string, history: any[]) {
+    const summary = history
+      .slice(-8)
+      .map((m) => `${m.role}: ${m.content}`)
+      .join(" \n ")
+      .slice(0, 600);
+
+    const mcp = new MCPClient(
+      process.env.MCP_COMMAND || "npm",
+      (process.env.MCP_ARGS
+        ? process.env.MCP_ARGS.split(" ")
+        : ["run", "mcp"]) as string[]
+    );
+
+    await mcp.connect();
+    const result = await mcp.callTool({
+      name: "tool_router",
+      arguments: { userMessage, conversationSummary: summary },
+    });
+    mcp.disconnect();
+
+    const payload = JSON.parse(result.content?.[0]?.text || "{}");
+    return Array.isArray(payload?.actions) ? payload.actions : [];
+  }
+
+  private async executeTools(
+    userMessage: string,
+    history: any[],
+    routerActions: any[],
+    sessionId?: string
+  ) {
+    const agent = await this.getRecommendationAgent();
+
+    return await agent.recommend({
+      query: userMessage,
+      context: { filters: {} },
+      sessionId,
+      history,
+      useMCP: true,
+      routerActions,
+    });
+  }
+
+  private async generateResponse(
+    userMessage: string,
+    history: any[],
+    picks: any[],
+    routerActions: any[]
+  ) {
+    const response: any = {
+      picks: picks.map((pick) => ({ id: pick.id, reason: pick.reason })),
+      message: "",
+    };
+
+    // Verificar se precisa gerar imagem
+    const wantsImage =
+      routerActions.some((a: any) => a?.tool === "Geração de imagem") ||
+      this.isPaletteImageIntent(userMessage);
+
+    // Verificar se é apenas geração de imagem (sem busca de produtos)
+    const imageOnly =
+      routerActions.length === 1 &&
+      routerActions[0]?.tool === "Geração de imagem";
+
+    if (wantsImage) {
+      // Chamar tool chat para gerar imagem + resposta
+      const mcp = new MCPClient(
+        process.env.MCP_COMMAND || "npm",
+        (process.env.MCP_ARGS
+          ? process.env.MCP_ARGS.split(" ")
+          : ["run", "mcp"]) as string[]
+      );
+      await mcp.connect();
+
+      let toolRes: any;
+      try {
+        if (imageOnly) {
+          // Extrair cor da mensagem do usuário
+          const hex = this.extractColorFromMessage(userMessage);
+
+          // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
+          toolRes = await Promise.race([
+            mcp.callTool({
+              name: "generate_palette_image",
+              arguments: {
+                sceneId: "varanda/moderna-01",
+                hex: hex,
+                size: "1024x1024",
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error("Timeout na geração de imagem")),
+                60000
+              )
+            ),
+          ]);
+        } else {
+          // Se há produtos + imagem, usar o chat
+          toolRes = await Promise.race([
+            mcp.callTool({
+              name: "chat",
+              arguments: {
+                messages: [...history, { role: "user", content: userMessage }],
+                picks: response.picks,
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Timeout no chat")), 30000)
+            ),
+          ]);
+        }
+      } finally {
+        mcp.disconnect();
+      }
+
+      const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
+      const imageBase64 =
+        payload?.image?.imageBase64 ?? payload?.imageBase64 ?? null;
+
+      const provider =
+        payload?.image?.provider ?? payload?.provider ?? undefined;
+
+      const promptUsed =
+        payload?.image?.promptUsed ?? payload?.promptUsed ?? undefined;
+
+      const seed = payload?.image?.seed ?? payload?.seed ?? undefined;
+
+      response.message = (payload?.reply || response.message || "").trim();
+      if (!response.message) {
+        response.message =
+          "Pronto! Gerei a prévia com a parede pintada. Quer ajustar cena, acabamento ou tom?";
+      }
+
+      if (imageBase64) {
+        response.paletteImage = {
+          imageBase64,
+          provider,
+          promptUsed,
+          seed,
+        };
+        response.imageIntent = true;
+      }
+    } else {
+      // Resposta simples sem imagem
+      response.message = await this.formatPicksAsNaturalMessage(
+        userMessage,
+        response.picks
+      );
+    }
+
+    return response;
+  }
+
+  async chatUnified(req: Request, res: Response) {
+    try {
+      const userMessage = (req.body?.userMessage || "").toString();
+      const history = (req.body?.history || []) as Array<{
+        role: "user" | "assistant";
+        content: string;
+      }>;
+
+      if (!userMessage || typeof userMessage !== "string") {
+        return res.status(400).json({
+          error: "userMessage obrigatório",
+        });
+      }
+
+      // 1. Análise de intenção (internamente)
+      const routerActions = await this.analyzeIntent(userMessage, history);
+      console.log(
+        `\n\n\nrouterActions: ${JSON.stringify(routerActions)}\n\n\n`
+      );
+
+      // 2. Execução das tools recomendadas
+      const result = await this.executeTools(
+        userMessage,
+        history,
+        routerActions,
+        req.headers["x-session-id"]?.toString()
+      );
+
+      // 3. Geração de resposta natural
+      const response = await this.generateResponse(
+        userMessage,
+        history,
+        result,
+        routerActions
+      );
+
+      return res.json(response);
+    } catch (error) {
+      console.error("[AiController] chatUnified error", error);
+      return res.status(500).json({
+        error: "internal_error",
+      });
+    }
+  }
+
+  async routeWithMCP(req: Request, res: Response) {
+    try {
+      const userMessage = (req.body?.userMessage || "").toString();
+      const history = (req.body?.history || []) as Array<{
+        role: "user" | "assistant";
+        content: string;
+      }>;
+      if (!userMessage || typeof userMessage !== "string") {
+        return res
+          .status(400)
+          .json({ actions: [], rationale: "userMessage obrigatório" });
+      }
+
+      // Build a concise conversation summary from last messages
+      const last = history.slice(-8);
+      const summary = last
+        .map((m) => `${m.role}: ${m.content}`)
+        .join(" \n ")
+        .slice(0, 600);
+
+      const mcp = new MCPClient(
+        process.env.MCP_COMMAND || "npm",
+        (process.env.MCP_ARGS
+          ? process.env.MCP_ARGS.split(" ")
+          : ["run", "mcp"]) as string[]
+      );
+      await mcp.connect();
+      const result = await mcp.callTool({
+        name: "tool_router",
+        arguments: {
+          userMessage,
+          conversationSummary: summary,
+          limit: req.body?.limit,
+          offset: req.body?.offset,
+        },
+      });
+      mcp.disconnect();
+      const payload = JSON.parse(result.content?.[0]?.text || "{}");
+      // Ensure shape
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        !Array.isArray(payload.actions)
+      ) {
+        return res.json({ actions: [], rationale: "router_invalid_response" });
+      }
+      return res.json(payload);
+    } catch (error) {
+      console.error("[AiController] routeWithMCP error", error);
+      return res.json({ actions: [], rationale: "router_error" });
+    }
+  }
+
   private isPaletteImageIntent(query: string): boolean {
     const q = query.toLowerCase();
     return (
-      /\b(gerar|mostrar|ver)\b.*\b(imagem|foto)\b/.test(q) ||
+      /\b(gerar|gere|mostrar|ver)\b.*\b(imagem|foto)\b/.test(q) ||
       /\b(preview|paleta|aplicar cor|pintar parede)\b/.test(q)
     );
   }
 
-  private async resolvePaletteInputs(query: string): Promise<{
-    sceneId: string;
-    hex: string;
-    finish?: "fosco" | "acetinado" | "semibrilho" | "brilhante";
-    size?: "1024x1024" | "1024x768" | "768x1024";
-  }> {
-    // Heurística simples: tenta extrair hex e finish do texto
-    const hexMatch = query.match(/#([0-9a-fA-F]{6})\b/);
-    const hex = hexMatch ? `#${hexMatch[1]}` : "#5FA3D1";
-    const finishMap: Record<string, any> = {
-      fosco: "fosco",
-      acetinado: "acetinado",
-      semibrilho: "semibrilho",
-      "semi-brilho": "semibrilho",
-      brilhante: "brilhante",
+  private mapColorToHex(colorName: string): string {
+    const colorMap: Record<string, string> = {
+      branco: "#FFFFFF",
+      branca: "#FFFFFF",
+      white: "#FFFFFF",
+      preto: "#000000",
+      preta: "#000000",
+      black: "#000000",
+      cinza: "#737373",
+      gray: "#737373",
+      grey: "#737373",
+      azul: "#1D39C9",
+      blue: "#1D39C9",
+      vermelho: "#D14747",
+      red: "#D14747",
+      verde: "#61D161",
+      green: "#61D161",
+      amarelo: "#F4D125",
+      yellow: "#F4D125",
+      rosa: "#CE7EA6",
+      pink: "#CE7EA6",
+      marrom: "#93591F",
+      brown: "#93591F",
+      laranja: "#EC7F13",
+      orange: "#EC7F13",
+      bege: "#E2CD9C",
+      beige: "#E2CD9C",
+      roxo: "#AF25F4",
+      purple: "#AF25F4",
+      violeta: "#AF25F4",
+      violet: "#AF25F4",
+      turquesa: "#47D1AF",
+      turquoise: "#47D1AF",
+      coral: "#DD673C",
+      salmão: "#DD673C",
+      salmon: "#DD673C",
+      dourado: "#D1BE61",
+      gold: "#D1BE61",
+      prateado: "#737373",
+      silver: "#737373",
+      vinho: "#C91D73",
+      wine: "#C91D73",
+      burgundy: "#C91D73",
+      jade: "#1F9346",
+      aqua: "#96E9E2",
+      ciano: "#1F9393",
+      teal: "#1F9393",
+      lima: "#C0F425",
+      lime: "#C0F425",
+      oliva: "#93761F",
+      olive: "#93761F",
+      âmbar: "#ECB613",
+      amber: "#ECB613",
+      mostarda: "#C6AF53",
+      mustard: "#C6AF53",
+      fúcsia: "#EC13DA",
+      fuchsia: "#EC13DA",
+      anil: "#7E8BCE",
+      indigo: "#7E8BCE",
+      céu: "#96C6E9",
+      sky: "#96C6E9",
+      "light blue": "#96C6E9",
+      "azul claro": "#96C6E9",
+      "azul escuro": "#1D39C9",
+      "dark blue": "#1D39C9",
+      "verde claro": "#61D161",
+      "light green": "#61D161",
+      "verde escuro": "#1F9346",
+      "dark green": "#1F9346",
+      "vermelho claro": "#D14747",
+      "light red": "#D14747",
+      "vermelho escuro": "#C91D73",
+      "dark red": "#C91D73",
     };
-    let finish: any = undefined;
-    for (const key of Object.keys(finishMap)) {
-      if (new RegExp(`\\b${key}\\b`, "i").test(query)) {
-        finish = finishMap[key];
-        break;
+
+    const normalizedColor = colorName.toLowerCase().trim();
+    return colorMap[normalizedColor] || "#5FA3D1"; // fallback para azul médio
+  }
+
+  private extractColorFromMessage(message: string): string {
+    const colorKeywords = [
+      "branco",
+      "branca",
+      "white",
+      "preto",
+      "preta",
+      "black",
+      "cinza",
+      "gray",
+      "grey",
+      "azul",
+      "blue",
+      "vermelho",
+      "red",
+      "verde",
+      "green",
+      "amarelo",
+      "yellow",
+      "rosa",
+      "pink",
+      "marrom",
+      "brown",
+      "laranja",
+      "orange",
+      "bege",
+      "beige",
+      "roxo",
+      "purple",
+      "violeta",
+      "violet",
+      "turquesa",
+      "turquoise",
+      "coral",
+      "salmão",
+      "salmon",
+      "dourado",
+      "gold",
+      "prateado",
+      "silver",
+      "vinho",
+      "wine",
+      "burgundy",
+      "jade",
+      "aqua",
+      "ciano",
+      "teal",
+      "lima",
+      "lime",
+      "oliva",
+      "olive",
+      "âmbar",
+      "amber",
+      "mostarda",
+      "mustard",
+      "fúcsia",
+      "fuchsia",
+      "anil",
+      "indigo",
+      "céu",
+      "sky",
+    ];
+
+    const messageLower = message.toLowerCase();
+    for (const color of colorKeywords) {
+      if (messageLower.includes(color)) {
+        return this.mapColorToHex(color);
       }
     }
-    // Cena padrão (pode ser parametrizada via heurística no futuro)
-    const sceneId = "varanda/moderna-01";
-    const size: any = "1024x1024";
-    return { sceneId, hex, finish, size };
+
+    return "#5FA3D1"; // fallback para azul médio
   }
 
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {
@@ -72,9 +445,18 @@ export class AiController {
       // Validar entrada com Zod
       const validatedQuery = RecommendationQuerySchema.parse(req.body);
 
-      console.log(`[AiController] Recebida recomendação:`, validatedQuery);
-
       const agent = await this.getRecommendationAgent();
+      // If router suggests Prisma, prioritize filter_search only
+      const routerActions = (req.body?.routerActions || []) as Array<any>;
+      const wantsFilterOnly = Array.isArray(routerActions)
+        ? routerActions.some(
+            (a) => a?.tool === "Procurar tinta no Prisma por filtro"
+          )
+        : false;
+
+      if (routerActions.length > 0) {
+      }
+
       const result = await agent.recommend({
         query: validatedQuery.query,
         context: {
@@ -84,6 +466,7 @@ export class AiController {
           (req as any).session?.id || req.headers["x-session-id"]?.toString(),
         history: (req.body && req.body.history) || [],
         useMCP: true,
+        routerActions,
       });
 
       // Converter para o formato esperado pelo frontend
@@ -97,50 +480,72 @@ export class AiController {
         notes: `Encontradas ${result.length} tintas usando MCP.`,
       } as any;
 
-      try {
-        const mcp = new MCPClient(
-          process.env.MCP_COMMAND || "npm",
-          (process.env.MCP_ARGS
-            ? process.env.MCP_ARGS.split(" ")
-            : ["run", "mcp"]) as string[]
-        );
-        await mcp.connect();
-        const messages = ([...(validatedQuery.history || [])] as any[]).concat([
-          { role: "user", content: validatedQuery.query },
-        ]);
-        const toolRes = await mcp.callTool({
-          name: "chat",
-          arguments: { messages },
-        });
-        mcp.disconnect();
-        const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
-        if (payload?.reply) {
-          (response as any).message = payload.reply;
-        } else {
+      // Only call chat tool if we have picks OR if router suggests image generation
+      const explicitAsk = this.isPaletteImageIntent(validatedQuery.query);
+      const wantsImage =
+        routerActions.some((a) => a?.tool === "Geração de imagem") ||
+        explicitAsk;
+      const shouldCallChat = wantsImage;
+
+      if (shouldCallChat) {
+        try {
+          const mcp = new MCPClient(
+            process.env.MCP_COMMAND || "npm",
+            (process.env.MCP_ARGS
+              ? process.env.MCP_ARGS.split(" ")
+              : ["run", "mcp"]) as string[]
+          );
+          await mcp.connect();
+          const messages = (
+            [...(validatedQuery.history || [])] as any[]
+          ).concat([{ role: "user", content: validatedQuery.query }]);
+          const toolRes = await mcp.callTool({
+            name: "chat",
+            arguments: { messages, picks },
+          });
+          mcp.disconnect();
+          const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
+          if (payload?.reply) {
+            (response as any).message = payload.reply;
+          } else {
+            (response as any).message = await this.formatWithLLM(
+              validatedQuery.query,
+              picks
+            ).catch(
+              async () =>
+                await this.formatPicksAsNaturalMessage(
+                  validatedQuery.query,
+                  picks
+                )
+            );
+          }
+          if (payload?.image?.imageBase64) {
+            (response as any).paletteImage = payload.image;
+            (response as any).imageIntent = true;
+          }
+        } catch (e) {
+          console.error(`[AiController] MCP chat fallback to LLM:`, e);
           (response as any).message = await this.formatWithLLM(
             validatedQuery.query,
             picks
-          ).catch(() =>
-            this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+          ).catch(
+            async () =>
+              await this.formatPicksAsNaturalMessage(
+                validatedQuery.query,
+                picks
+              )
           );
         }
-        if (payload?.image?.imageBase64) {
-          (response as any).paletteImage = payload.image;
-        }
-      } catch (e) {
-        console.error(`[AiController] MCP chat fallback to LLM:`, e);
-        (response as any).message = await this.formatWithLLM(
-          validatedQuery.query,
-          picks
-        ).catch(() =>
-          this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
-        );
+      } else {
+        (response as any).imageIntent = false;
+        (response as any).message =
+          picks.length === 0
+            ? "Não encontrei tintas com esses critérios. Pode me dizer o ambiente (sala, quarto...), acabamento (fosco, acetinado...) e a cor desejada?"
+            : await this.formatPicksAsNaturalMessage(
+                validatedQuery.query,
+                picks
+              );
       }
-
-      console.log(`[AiController] Recomendação retornada:`, {
-        picksCount: response.picks.length,
-        hasNotes: !!response.notes,
-      });
 
       res.json(response);
     } catch (error: any) {
@@ -248,9 +653,6 @@ export class AiController {
       // Validar entrada com Zod
       const validatedQuery = RecommendationQuerySchema.parse(req.body);
 
-      console.log(`[AiController] Recebida recomendação MCP:`, validatedQuery);
-      console.log(`history: ${JSON.stringify(req.body.history)}`);
-
       const agent = await this.getRecommendationAgent();
       const result = await agent.recommend({
         query: validatedQuery.query,
@@ -273,14 +675,10 @@ export class AiController {
         notes: `Encontradas ${result.length} tintas usando MCP (Model Context Protocol).`,
         mcpEnabled: true,
         message: await this.formatWithLLM(validatedQuery.query, picks).catch(
-          () => this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+          async () =>
+            await this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
         ),
       } as any;
-
-      console.log(`[AiController] Recomendação MCP retornada:`, {
-        picksCount: response.picks.length,
-        mcpEnabled: response.mcpEnabled,
-      });
 
       res.json(response);
     } catch (error: any) {
@@ -363,70 +761,77 @@ export namespace AiControllerHelpers {
 // Extensão da classe para manter métodos puros
 declare module "./ai.controller" {
   interface AiController {
-    formatPicksAsNaturalMessage(query: string, picks: SimplePick[]): string;
+    formatPicksAsNaturalMessage(
+      query: string,
+      picks: SimplePick[]
+    ): Promise<string>;
     formatWithLLM(query: string, picks: SimplePick[]): Promise<string>;
   }
 }
 
-AiController.prototype.formatPicksAsNaturalMessage = function (
+AiController.prototype.formatPicksAsNaturalMessage = async function (
   this: AiController,
   query: string,
   picks: SimplePick[]
-): string {
+): Promise<string> {
   if (!picks || picks.length === 0) {
     return "Não encontrei opções exatas para sua necessidade. Pode me dar mais detalhes (ambiente, acabamento, cor desejada)?";
   }
-  // Escolher 1-2 destaques de forma leve estocástica
-  const k = picks.length >= 2 ? AiControllerHelpers.choice([1, 2]) : 1;
-  const top = picks
-    .slice(0, k)
-    .map((p) => AiControllerHelpers.parseReason(p.reason));
 
-  const templates = [
-    // 1 item
-    (p: any) =>
-      `${p.name || "Uma boa opção"}${p.finish ? ` (${p.finish})` : ""}${
-        p.roomType ? `, ideal para ${p.roomType}` : ""
-      }${p.surfaceType ? ` em ${p.surfaceType}` : ""}${
-        p.color ? `, na cor ${p.color}` : ""
-      }.`,
-    (p: any) =>
-      `Recomendo ${p.name || "uma tinta indicada"}${
-        p.finish ? ` com acabamento ${p.finish}` : ""
-      }${p.roomType ? ` para ${p.roomType}` : ""}${
-        p.surfaceType ? ` (${p.surfaceType})` : ""
-      }.`,
-  ];
+  try {
+    const system = `Você é um assistente especializado em tintas e acabamentos. Responda de forma natural, sucinta e prestativa.
 
-  // Renderização curta para a segunda opção (sem frase completa)
-  const renderShort = (p: any) =>
-    `${p.name || "outra tinta"}${p.finish ? ` (${p.finish})` : ""}${
-      p.color ? `, cor ${p.color}` : ""
-    }`;
+Regras:
+- Seja breve e direto ao ponto
+- Use tom prestativo e amigável
+- Mencione 1-2 tintas principais encontradas
+- Inclua informações relevantes como acabamento, cor, linha
+- Pergunte se o usuário quer ver mais opções ou gerar uma prévia
+- Não seja muito formal ou técnico
+- Seja variado nas suas respostas`;
 
-  const joiners = [
-    (a: string, p: any) => `${a} Outra opção é ${renderShort(p)}.`,
-    (a: string, p: any) => `${a} Também posso sugerir ${renderShort(p)}.`,
-  ];
+    const user = `Pedido do usuário: "${query}"
 
-  const followUps = [
-    "Quer que eu liste mais opções?",
-    "Posso mostrar mais alternativas se você quiser.",
-    "Prefere que eu traga opções com outro acabamento ou cor?",
-  ];
+Tintas encontradas:
+${picks
+  .slice(0, 3)
+  .map((p, i) => `${i + 1}. ${p.reason}`)
+  .join("\n")}
 
-  const first = AiControllerHelpers.choice(templates)(top[0]);
-  let message = first;
-  if (top.length === 2) {
-    message = AiControllerHelpers.choice(joiners)(first, top[1]);
+Responda de forma natural e sucinta, mencionando as tintas encontradas.`;
+
+    const chat = makeChat();
+    const resp = await chat.invoke([
+      { role: "system", content: system } as any,
+      { role: "user", content: user } as any,
+    ] as any);
+
+    const content = resp?.content;
+    const text = (
+      typeof content === "string"
+        ? content
+        : Array.isArray(content) &&
+          content[0] &&
+          typeof content[0] === "object" &&
+          "text" in content[0]
+        ? content[0].text
+        : ""
+    ).trim();
+
+    if (text) {
+      return text;
+    }
+  } catch (error) {
+    console.error(
+      "[formatPicksAsNaturalMessage] Erro ao gerar resposta com LLM:",
+      error
+    );
   }
 
-  const tail =
-    picks.length > top.length
-      ? ` ${AiControllerHelpers.choice(followUps)}`
-      : "";
-  // Sem repetir a intenção do usuário
-  return `${message}${tail}`;
+  // Fallback para resposta simples se LLM falhar
+  const topPick = picks[0];
+  const name = topPick.reason.split(" - ")[0];
+  return `Encontrei ${picks.length} tinta(s) adequadas. ${name} é uma boa opção. Quer ver mais alternativas?`;
 };
 
 AiController.prototype.formatWithLLM = async function (

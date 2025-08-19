@@ -105,7 +105,6 @@ export class MCPClient extends EventEmitter {
   }
 
   async callTool(toolCall: MCPToolCall): Promise<MCPToolResult> {
-    // sendRequest já resolve com o campo "result" do envelope JSON-RPC
     const result = await this.sendRequest("tools/call", toolCall);
     return result;
   }

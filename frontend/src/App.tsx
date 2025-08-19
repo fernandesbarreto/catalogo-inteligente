@@ -10,16 +10,16 @@ interface Message {
   imageProvider?: string;
 }
 
-interface RecommendationPick {
-  id: string;
-  reason: string;
-}
+// interface RecommendationPick {
+//   id: string;
+//   reason: string;
+// }
 
-interface RecommendationResponse {
-  picks: RecommendationPick[];
-  notes?: string;
-  mcpEnabled?: boolean;
-}
+// interface RecommendationResponse {
+//   picks: RecommendationPick[];
+//   notes?: string;
+//   mcpEnabled?: boolean;
+// }
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([
@@ -58,7 +58,7 @@ function App() {
       // Fallback non-persistent
       if (!sessionId) setSessionId(`${Date.now()}-${Math.random()}`);
     }
-  }, []);
+  }, [sessionId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,17 +83,18 @@ function App() {
         content: m.content,
       }));
 
-      const response = await fetch(
-        "http://localhost:3000/bff/ai/recommendations",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-session-id": sessionId || "",
-          },
-          body: JSON.stringify({ query: inputValue.trim(), history }),
-        }
-      );
+      // Substituir as 2 chamadas por:
+      const response = await fetch("http://localhost:3000/bff/ai/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": sessionId || "",
+        },
+        body: JSON.stringify({
+          userMessage: userMessage.content,
+          history,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -133,8 +134,12 @@ function App() {
         id: (Date.now() + 1).toString(),
         type: "bot",
         content: botContent,
-        imageBase64: data?.paletteImage?.imageBase64,
-        imageProvider: data?.paletteImage?.provider,
+        imageBase64: data?.imageIntent
+          ? data?.paletteImage?.imageBase64
+          : undefined,
+        imageProvider: data?.imageIntent
+          ? data?.paletteImage?.provider
+          : undefined,
         timestamp: new Date(),
       };
 
@@ -152,8 +157,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  // Removed standalone image generation; handled by chat responses now
 
   const exampleQueries = [
     "Preciso de uma tinta azul para quarto infantil",
@@ -272,8 +275,6 @@ function App() {
           </div>
         </div>
       </main>
-
-      {/* Standalone palette generator removed; images now come via chat replies */}
 
       <footer className="App-footer">
         <p>Powered by MCP • Assistente Inteligente de Tintas</p>

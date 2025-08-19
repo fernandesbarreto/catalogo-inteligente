@@ -16,6 +16,8 @@ export const RecommendationQuerySchema = z.object({
     })
     .optional(),
   history: z.array(ChatMessageSchema).optional(),
+  // Optional router actions from the frontend pre-MCP router
+  routerActions: z.any().array().optional(),
 });
 
 export const RecommendationPickSchema = z.object({
