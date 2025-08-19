@@ -135,17 +135,64 @@ export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
 
   if (!decision) {
     const h = simpleHeuristicIntent(userText);
-    decision = {
-      reply: h.wantsImage
+
+    // Se há tintas encontradas e não é intenção de imagem, usar LLM para resposta natural
+    let reply = "";
+    if (picks.length > 0 && !h.wantsImage) {
+      try {
+        const system = `Você é um assistente especializado em tintas e acabamentos. Responda de forma natural, sucinta e prestativa.
+        
+Regras:
+- Seja breve e direto ao ponto
+- Use tom prestativo e amigável
+- Mencione 1-2 tintas principais encontradas
+- Inclua informações relevantes como acabamento, cor, linha
+- Pergunte se o usuário quer ver mais opções ou gerar uma prévia
+- Não seja muito formal ou técnico`;
+
+        const user = `Pedido do usuário: "${userText}"
+
+Tintas encontradas:
+${picks
+  .slice(0, 3)
+  .map((p, i) => `${i + 1}. ${p.reason}`)
+  .join("\n")}
+
+Responda de forma natural e sucinta, mencionando as tintas encontradas.`;
+
+        const chat = makeChat();
+        const resp = await chat.invoke([
+          { role: "system", content: system } as any,
+          { role: "user", content: user } as any,
+        ] as any);
+        const content = resp?.content;
+        reply = (
+          typeof content === "string"
+            ? content
+            : Array.isArray(content) &&
+              content[0] &&
+              typeof content[0] === "object" &&
+              "text" in content[0]
+            ? content[0].text
+            : ""
+        ).trim();
+      } catch (error) {
+        console.error("[chatTool] Erro ao gerar resposta com LLM:", error);
+        reply = `Encontrei ${
+          picks.length
+        } tinta(s) adequadas para sua necessidade. ${picks
+          .slice(0, 2)
+          .map((p) => p.reason.split(" - ")[0])
+          .join(", ")} são boas opções.`;
+      }
+    } else {
+      reply = h.wantsImage
         ? "Claro! Vou gerar uma prévia aplicada na parede."
-        : picks.length > 0
-        ? `Encontrei ${
-            picks.length
-          } tinta(s) que podem ser adequadas para sua necessidade. ${picks
-            .slice(0, 2)
-            .map((p) => p.reason.split(" - ")[0])
-            .join(", ")} são boas opções.`
-        : "Certo! Posso sugerir tintas ou gerar uma prévia se desejar.",
+        : "Certo! Posso sugerir tintas ou gerar uma prévia se desejar.";
+    }
+
+    decision = {
+      reply,
       generateImage: h.wantsImage,
       sceneId: h.sceneId,
       hex: h.hex,

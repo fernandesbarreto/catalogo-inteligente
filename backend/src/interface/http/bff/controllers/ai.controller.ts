@@ -209,8 +209,12 @@ export class AiController {
             (response as any).message = await this.formatWithLLM(
               validatedQuery.query,
               picks
-            ).catch(() =>
-              this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+            ).catch(
+              async () =>
+                await this.formatPicksAsNaturalMessage(
+                  validatedQuery.query,
+                  picks
+                )
             );
           }
           if (payload?.image?.imageBase64) {
@@ -222,8 +226,12 @@ export class AiController {
           (response as any).message = await this.formatWithLLM(
             validatedQuery.query,
             picks
-          ).catch(() =>
-            this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+          ).catch(
+            async () =>
+              await this.formatPicksAsNaturalMessage(
+                validatedQuery.query,
+                picks
+              )
           );
         }
       } else {
@@ -231,7 +239,10 @@ export class AiController {
         (response as any).message =
           picks.length === 0
             ? "Não encontrei tintas com esses critérios. Pode me dizer o ambiente (sala, quarto...), acabamento (fosco, acetinado...) e a cor desejada?"
-            : this.formatPicksAsNaturalMessage(validatedQuery.query, picks);
+            : await this.formatPicksAsNaturalMessage(
+                validatedQuery.query,
+                picks
+              );
       }
 
       console.log(`[AiController] Recomendação retornada:`, {
@@ -370,7 +381,8 @@ export class AiController {
         notes: `Encontradas ${result.length} tintas usando MCP (Model Context Protocol).`,
         mcpEnabled: true,
         message: await this.formatWithLLM(validatedQuery.query, picks).catch(
-          () => this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
+          async () =>
+            await this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
         ),
       } as any;
 
@@ -460,70 +472,77 @@ export namespace AiControllerHelpers {
 // Extensão da classe para manter métodos puros
 declare module "./ai.controller" {
   interface AiController {
-    formatPicksAsNaturalMessage(query: string, picks: SimplePick[]): string;
+    formatPicksAsNaturalMessage(
+      query: string,
+      picks: SimplePick[]
+    ): Promise<string>;
     formatWithLLM(query: string, picks: SimplePick[]): Promise<string>;
   }
 }
 
-AiController.prototype.formatPicksAsNaturalMessage = function (
+AiController.prototype.formatPicksAsNaturalMessage = async function (
   this: AiController,
   query: string,
   picks: SimplePick[]
-): string {
+): Promise<string> {
   if (!picks || picks.length === 0) {
     return "Não encontrei opções exatas para sua necessidade. Pode me dar mais detalhes (ambiente, acabamento, cor desejada)?";
   }
-  // Escolher 1-2 destaques de forma leve estocástica
-  const k = picks.length >= 2 ? AiControllerHelpers.choice([1, 2]) : 1;
-  const top = picks
-    .slice(0, k)
-    .map((p) => AiControllerHelpers.parseReason(p.reason));
 
-  const templates = [
-    // 1 item
-    (p: any) =>
-      `${p.name || "Uma boa opção"}${p.finish ? ` (${p.finish})` : ""}${
-        p.roomType ? `, ideal para ${p.roomType}` : ""
-      }${p.surfaceType ? ` em ${p.surfaceType}` : ""}${
-        p.color ? `, na cor ${p.color}` : ""
-      }.`,
-    (p: any) =>
-      `Recomendo ${p.name || "uma tinta indicada"}${
-        p.finish ? ` com acabamento ${p.finish}` : ""
-      }${p.roomType ? ` para ${p.roomType}` : ""}${
-        p.surfaceType ? ` (${p.surfaceType})` : ""
-      }.`,
-  ];
+  try {
+    const system = `Você é um assistente especializado em tintas e acabamentos. Responda de forma natural, sucinta e prestativa.
 
-  // Renderização curta para a segunda opção (sem frase completa)
-  const renderShort = (p: any) =>
-    `${p.name || "outra tinta"}${p.finish ? ` (${p.finish})` : ""}${
-      p.color ? `, cor ${p.color}` : ""
-    }`;
+Regras:
+- Seja breve e direto ao ponto
+- Use tom prestativo e amigável
+- Mencione 1-2 tintas principais encontradas
+- Inclua informações relevantes como acabamento, cor, linha
+- Pergunte se o usuário quer ver mais opções ou gerar uma prévia
+- Não seja muito formal ou técnico
+- Seja variado nas suas respostas`;
 
-  const joiners = [
-    (a: string, p: any) => `${a} Outra opção é ${renderShort(p)}.`,
-    (a: string, p: any) => `${a} Também posso sugerir ${renderShort(p)}.`,
-  ];
+    const user = `Pedido do usuário: "${query}"
 
-  const followUps = [
-    "Quer que eu liste mais opções?",
-    "Posso mostrar mais alternativas se você quiser.",
-    "Prefere que eu traga opções com outro acabamento ou cor?",
-  ];
+Tintas encontradas:
+${picks
+  .slice(0, 3)
+  .map((p, i) => `${i + 1}. ${p.reason}`)
+  .join("\n")}
 
-  const first = AiControllerHelpers.choice(templates)(top[0]);
-  let message = first;
-  if (top.length === 2) {
-    message = AiControllerHelpers.choice(joiners)(first, top[1]);
+Responda de forma natural e sucinta, mencionando as tintas encontradas.`;
+
+    const chat = makeChat();
+    const resp = await chat.invoke([
+      { role: "system", content: system } as any,
+      { role: "user", content: user } as any,
+    ] as any);
+
+    const content = resp?.content;
+    const text = (
+      typeof content === "string"
+        ? content
+        : Array.isArray(content) &&
+          content[0] &&
+          typeof content[0] === "object" &&
+          "text" in content[0]
+        ? content[0].text
+        : ""
+    ).trim();
+
+    if (text) {
+      return text;
+    }
+  } catch (error) {
+    console.error(
+      "[formatPicksAsNaturalMessage] Erro ao gerar resposta com LLM:",
+      error
+    );
   }
 
-  const tail =
-    picks.length > top.length
-      ? ` ${AiControllerHelpers.choice(followUps)}`
-      : "";
-  // Sem repetir a intenção do usuário
-  return `${message}${tail}`;
+  // Fallback para resposta simples se LLM falhar
+  const topPick = picks[0];
+  const name = topPick.reason.split(" - ")[0];
+  return `Encontrei ${picks.length} tinta(s) adequadas. ${name} é uma boa opção. Quer ver mais alternativas?`;
 };
 
 AiController.prototype.formatWithLLM = async function (
