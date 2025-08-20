@@ -320,6 +320,31 @@ export class MCPServer {
 
         case "filter_search":
           result = await this.filterSearch.execute(args.query, args.filters);
+
+          if (
+            args.fallbackToSemantic &&
+            Array.isArray(result) &&
+            result.length === 0
+          ) {
+            try {
+              const semanticResult = await this.semanticSearch.execute(
+                args.query,
+                args.filters
+              );
+              if (Array.isArray(semanticResult) && semanticResult.length > 0) {
+                console.log(
+                  `[MCPServer] Semantic search fallback found ${semanticResult.length} results`
+                );
+                result = semanticResult;
+              }
+            } catch (fallbackError) {
+              console.error(
+                "[MCPServer] Error in semantic search fallback:",
+                fallbackError
+              );
+              // Keep the original empty result if fallback fails
+            }
+          }
           break;
 
         case "list_scenes":

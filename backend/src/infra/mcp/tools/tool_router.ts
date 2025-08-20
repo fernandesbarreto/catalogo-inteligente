@@ -193,16 +193,24 @@ NÃO use markdown. Apenas o JSON puro.`;
           size: IMAGE_SIZE_DEFAULT,
         };
       } else if (action.tool === "Procurar tinta no Prisma por filtro") {
+        // Extract filters from keywords and user message
+        const extractedFilters = extractFiltersFromInput(input);
+
         baseAction.args = {
           query: user,
-          filters: {},
+          filters: extractedFilters,
           ...(input.limit ? { limit: input.limit } : {}),
           ...(input.offset ? { offset: input.offset } : {}),
         };
+
+        baseAction.args.fallbackToSemantic = true;
       } else if (action.tool === "Busca semântica de tinta nos embeddings") {
+        // Extract filters from keywords and user message
+        const extractedFilters = extractFiltersFromInput(input);
+
         baseAction.args = {
           query: user,
-          filters: {},
+          filters: extractedFilters,
           top_k: Math.min(input.limit || 8, 20) || 8,
           ...(input.offset ? { offset: input.offset } : {}),
         };
@@ -224,6 +232,45 @@ NÃO use markdown. Apenas o JSON puro.`;
     // Fallback para lógica antiga em caso de erro
     return toolRouterFallback(input);
   }
+}
+
+function extractFiltersFromInput(input: ToolRouterInput): Record<string, any> {
+  const filters: Record<string, any> = {};
+
+  // Extract room type from keywords
+  if (input.keywords?.environment) {
+    const environmentToRoomTypeMap: Record<string, string> = {
+      varanda: "área externa",
+      "área externa": "área externa",
+      exterior: "área externa",
+      fachada: "área externa",
+      externa: "área externa",
+      sala: "sala",
+      quarto: "quarto",
+      cozinha: "cozinha",
+      banheiro: "banheiro",
+      escritorio: "escritório",
+      corredor: "sala",
+    };
+
+    const roomType = environmentToRoomTypeMap[input.keywords.environment];
+    if (roomType) {
+      filters.roomType = roomType;
+    }
+  }
+
+  // Extract color from keywords
+  if (input.keywords?.color) {
+    filters.color = input.keywords.color;
+  }
+
+  // If no filters from keywords, try to extract from user message
+  if (Object.keys(filters).length === 0) {
+    const userFilters = detectStructuredFilters(input.userMessage || "");
+    Object.assign(filters, userFilters.filters);
+  }
+
+  return filters;
 }
 
 function sanitizeString(value: string | undefined): string | undefined {
@@ -322,7 +369,7 @@ function detectStructuredFilters(text: string) {
       filters.roomType = "banheiro";
     else if (/(escrit[óo]rio|home office)/i.test(q))
       filters.roomType = "escritório";
-    else if (/(exterior|externa|fachada|área externa)/i.test(q))
+    else if (/(exterior|externa|fachada|área externa|varanda)/i.test(q))
       filters.roomType = "área externa";
   }
 
@@ -524,6 +571,9 @@ async function toolRouterFallback(
       rationale:
         "Pedido com filtros/atributos estruturados para retornar produtos do catálogo.",
     });
+
+    // Add fallback flag to indicate that semantic search should be used if filter search returns 0 results
+    args.fallbackToSemantic = true;
   }
 
   // Route: Image generation when preview/visualization requested or scene/hex provided

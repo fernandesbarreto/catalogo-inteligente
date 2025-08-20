@@ -76,16 +76,34 @@ export class RecommendationAgentWithMCP {
       );
       memoryFilters = snap?.filters;
     }
+    // Extract keywords from conversation for environment detection
+    let environmentKeywords: any = {};
+    if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+      const snap = await RecommendationAgentWithMCP.sessionMemory.get(
+        request.sessionId
+      );
+      if (snap?.keywords?.environment) {
+        // Map environment keywords to room type filters
+        environmentKeywords = this.mapEnvironmentToRoomType(
+          snap.keywords.environment
+        );
+      }
+    }
+
     const inferredFilters = {
       ...(memoryFilters || {}),
+      ...environmentKeywords,
       ...inferredFromHistory,
       ...inferredFromQuery,
     };
+    // Apply room type mapping for database queries
+    const mappedFilters = this.mapFiltersForDatabase(inferredFilters);
+
     const effectiveContext = {
       ...(request.context || {}),
       filters: {
         ...(request.context?.filters || {}),
-        ...inferredFilters,
+        ...mappedFilters,
       },
     };
 
@@ -135,9 +153,21 @@ export class RecommendationAgentWithMCP {
             context: { ...effectiveContext, offset },
             tools: ["filter_search"],
           });
+
+          const filterPicks = filterRes?.picks ?? [];
+          if (filterPicks.length === 0) {
+            console.log(
+              "[RecommendationAgent] Filter search returned 0 results, falling back to semantic search"
+            );
+            semanticRes = await this.mcpAdapter.processRecommendation({
+              query: effectiveQuery,
+              context: { ...effectiveContext, offset },
+              tools: ["semantic_search"],
+            });
+          }
         }
 
-        if (wantsSemantic) {
+        if (wantsSemantic && !semanticRes) {
           semanticRes = await this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
             context: { ...effectiveContext, offset },
@@ -145,21 +175,31 @@ export class RecommendationAgentWithMCP {
           });
         }
       } else {
-        // Fallback: call both tools
-        const [filterResTemp, semanticResTemp] = await Promise.all([
-          this.mcpAdapter.processRecommendation({
-            query: effectiveQuery,
-            context: { ...effectiveContext, offset },
-            tools: ["filter_search"],
-          }),
-          this.mcpAdapter.processRecommendation({
+        // Fallback: call filter search first, then semantic search if needed
+        filterRes = await this.mcpAdapter.processRecommendation({
+          query: effectiveQuery,
+          context: { ...effectiveContext, offset },
+          tools: ["filter_search"],
+        });
+
+        const filterPicks = filterRes?.picks ?? [];
+        if (filterPicks.length === 0) {
+          console.log(
+            "[RecommendationAgent] Filter search returned 0 results, falling back to semantic search"
+          );
+          semanticRes = await this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
             context: { ...effectiveContext, offset },
             tools: ["semantic_search"],
-          }),
-        ]);
-        filterRes = filterResTemp;
-        semanticRes = semanticResTemp;
+          });
+        } else {
+          // If filter search returned results, also try semantic search for better coverage
+          semanticRes = await this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["semantic_search"],
+          });
+        }
       }
 
       const filterPicks = filterRes?.picks ?? [];
@@ -242,6 +282,36 @@ export class RecommendationAgentWithMCP {
   }
 
   // ====== Helpers ======
+  private mapEnvironmentToRoomType(environment: string): any {
+    const environmentToRoomTypeMap: Record<string, string> = {
+      varanda: "área externa",
+      "área externa": "área externa",
+      exterior: "área externa",
+      fachada: "área externa",
+      externa: "área externa",
+      sala: "sala",
+      quarto: "quarto",
+      cozinha: "cozinha",
+      banheiro: "banheiro",
+      escritorio: "escritório",
+      corredor: "sala", // Default corridors to sala for search
+    };
+
+    const roomType = environmentToRoomTypeMap[environment];
+    return roomType ? { roomType } : {};
+  }
+
+  private mapFiltersForDatabase(filters: any): any {
+    const mapped = { ...filters };
+
+    // Map environment/room type keywords to database values
+    if (mapped.roomType === "varanda") {
+      mapped.roomType = "área externa";
+    }
+
+    return mapped;
+  }
+
   private inferFiltersFromQuery(query: string): {
     surfaceType?: string;
     roomType?: string;
@@ -259,7 +329,7 @@ export class RecommendationAgentWithMCP {
     else if (/(sala|estar|living)/.test(q)) filters.roomType = "sala";
     else if (/(escrit[óo]rio|home office)/.test(q))
       filters.roomType = "escritório";
-    else if (/(exterior|externa|fachada|área externa)/.test(q))
+    else if (/(exterior|externa|fachada|área externa|varanda)/.test(q))
       filters.roomType = "área externa";
 
     // surfaceType
