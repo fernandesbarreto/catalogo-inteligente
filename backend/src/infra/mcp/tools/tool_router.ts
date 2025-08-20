@@ -72,16 +72,14 @@ Ferramentas disponíveis:
 Contexto da conversa: ${contextText || "Nenhum contexto específico"}
 Mensagem do usuário: "${user}"
 
-Retorne APENAS um array JSON com as ferramentas que devem ser chamadas, em ordem de prioridade.
+IMPORTANTE: Retorne APENAS um array JSON válido, SEM markdown, SEM explicações adicionais.
 Cada item deve ter: {"tool": "nome_da_ferramenta", "confidence": 0.9, "rationale": "explicação"}
 
-Exemplos:
-- "Quero uma tinta azul para sala" → [{"tool": "Procurar tinta no Prisma por filtro", "confidence": 0.9, "rationale": "Busca específica por cor e ambiente"}]
-- "Algo que combine com meu estilo moderno" → [{"tool": "Busca semântica de tinta nos embeddings", "confidence": 0.8, "rationale": "Busca baseada em estilo e inspiração"}]
-- "Me mostre como ficaria azul" → [{"tool": "Geração de imagem", "confidence": 0.9, "rationale": "Usuário quer ver resultado visual"}]
-- "Tintas azuis para sala e como ficaria" → [{"tool": "Procurar tinta no Prisma por filtro", "confidence": 0.8, "rationale": "Busca específica"}, {"tool": "Geração de imagem", "confidence": 0.9, "rationale": "Visualização solicitada"}]
+Exemplos de resposta correta:
+[{"tool": "Procurar tinta no Prisma por filtro", "confidence": 0.9, "rationale": "Busca específica por cor e ambiente"}]
+[{"tool": "Geração de imagem", "confidence": 0.9, "rationale": "Usuário quer ver resultado visual"}]
 
-Resposta (apenas JSON):`;
+NÃO use markdown. Apenas o JSON puro.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -96,7 +94,38 @@ Resposta (apenas JSON):`;
       throw new Error("Empty response from OpenAI");
     }
 
-    const actions = JSON.parse(content);
+    // Limpar resposta do GPT que pode vir com markdown
+    let cleanContent = content;
+
+    console.log("[intelligentToolRouter] Raw OpenAI response:", content);
+
+    // Remover ```json e ``` se presentes
+    if (cleanContent.startsWith("```json")) {
+      cleanContent = cleanContent.replace(/^```json\s*/, "");
+    }
+    if (cleanContent.startsWith("```")) {
+      cleanContent = cleanContent.replace(/^```\s*/, "");
+    }
+    if (cleanContent.endsWith("```")) {
+      cleanContent = cleanContent.replace(/\s*```$/, "");
+    }
+
+    // Remover quebras de linha e espaços extras
+    cleanContent = cleanContent.trim();
+
+    console.log("[intelligentToolRouter] Cleaned content:", cleanContent);
+
+    let actions: any;
+    try {
+      actions = JSON.parse(cleanContent);
+      console.log("[intelligentToolRouter] Parsed actions:", actions);
+    } catch (parseError) {
+      console.error("[intelligentToolRouter] JSON parse error:", parseError);
+      console.error("[intelligentToolRouter] Failed content:", cleanContent);
+      throw new Error(
+        `Invalid JSON response from OpenAI: ${(parseError as Error).message}`
+      );
+    }
 
     // Validar e processar as ações
     const validActions = actions
