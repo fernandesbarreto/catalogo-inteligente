@@ -21,7 +21,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
   const embeddingProvider = EmbeddingProviderFactory.getProvider();
 
   if (!embeddingProvider.isAvailable()) {
-    throw new Error("Embedding provider is not available");
+    throw new Error("Provedor de embedding não está disponível");
   }
 
   try {
@@ -83,7 +83,7 @@ async function seedPaints() {
     // Check if embedding provider is available
     const embeddingProvider = EmbeddingProviderFactory.getProvider();
     if (!embeddingProvider.isAvailable()) {
-      throw new Error("Embedding provider is not available");
+      throw new Error("Provedor de embedding não está disponível");
     }
 
     // Parse CSV file

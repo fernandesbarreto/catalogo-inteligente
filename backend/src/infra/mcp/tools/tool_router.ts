@@ -123,7 +123,7 @@ NÃO use markdown. Apenas o JSON puro.`;
       console.error("[intelligentToolRouter] JSON parse error:", parseError);
       console.error("[intelligentToolRouter] Failed content:", cleanContent);
       throw new Error(
-        `Invalid JSON response from OpenAI: ${(parseError as Error).message}`
+        `Resposta JSON inválida do OpenAI: ${(parseError as Error).message}`
       );
     }
 
@@ -177,13 +177,17 @@ NÃO use markdown. Apenas o JSON puro.`;
         }
 
         // Mapear ambiente das keywords para sceneId
-        const sceneId = input.keywords?.environment 
-          ? `${input.keywords.environment}/01` 
+        const sceneId = input.keywords?.environment
+          ? `${input.keywords.environment}/01`
           : "sala/01"; // default é sala
-        
-        console.error(`[intelligentToolRouter] 🏠 Ambiente extraído: ${input.keywords?.environment || 'sala (default)'}`);
+
+        console.error(
+          `[intelligentToolRouter] 🏠 Ambiente extraído: ${
+            input.keywords?.environment || "sala (default)"
+          }`
+        );
         console.error(`[intelligentToolRouter] 🎬 SceneId final: ${sceneId}`);
-        
+
         baseAction.args = {
           sceneId,
           ...(hex ? { hex } : {}),
@@ -526,13 +530,19 @@ async function toolRouterFallback(
   // Route: Image generation when preview/visualization requested or scene/hex provided
   if (wantsImageGeneration(combined) || normalizedHex || maybeSceneId) {
     // Mapear ambiente das keywords para sceneId no fallback também
-    const sceneId = input.keywords?.environment 
-      ? `${input.keywords.environment}/01` 
+    const sceneId = input.keywords?.environment
+      ? `${input.keywords.environment}/01`
       : maybeSceneId || "sala/01"; // default é sala
-    
-    console.error(`[toolRouterFallback] 🏠 Fallback: Ambiente extraído: ${input.keywords?.environment || 'sala (default)'}`);
-    console.error(`[toolRouterFallback] 🎬 Fallback: SceneId final: ${sceneId}`);
-    
+
+    console.error(
+      `[toolRouterFallback] 🏠 Fallback: Ambiente extraído: ${
+        input.keywords?.environment || "sala (default)"
+      }`
+    );
+    console.error(
+      `[toolRouterFallback] 🎬 Fallback: SceneId final: ${sceneId}`
+    );
+
     const args: Record<string, any> = {
       sceneId,
       ...(normalizedHex ? { hex: normalizedHex } : {}),

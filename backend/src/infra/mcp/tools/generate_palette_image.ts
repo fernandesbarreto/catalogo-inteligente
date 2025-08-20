@@ -198,7 +198,7 @@ async function generateWithStability(input: GenInput): Promise<GenOutput> {
   const maskPath = path.join(sceneDir, "mask.png");
 
   if (!fs.existsSync(basePath) || !fs.existsSync(maskPath)) {
-    throw new Error(`Scene not found or missing assets for '${sceneId}'`);
+    throw new Error(`Cena não encontrada ou assets ausentes para '${sceneId}'`);
   }
 
   const prompt =
@@ -281,7 +281,7 @@ async function generateWithOpenAI(input: GenInput): Promise<GenOutput> {
   const maskPath = path.join(sceneDir, "mask.png");
 
   if (!fs.existsSync(basePath) || !fs.existsSync(maskPath)) {
-    throw new Error(`Scene not found or missing assets for '${sceneId}'`);
+    throw new Error(`Cena não encontrada ou assets ausentes para '${sceneId}'`);
   }
 
   const prompt = buildPrompt(hex, finish);

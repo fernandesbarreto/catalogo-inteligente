@@ -158,7 +158,7 @@ export class AiController {
       response.message = (payload?.reply || response.message || "").trim();
       if (!response.message) {
         response.message =
-          "Done! I generated a preview with the painted wall. Do you need paint for anything else?";
+          "Pronto! Gerei uma prévia com a parede pintada. Precisa de tinta para mais alguma coisa?";
       }
 
       if (imageBase64) {
@@ -191,7 +191,7 @@ export class AiController {
 
       if (!userMessage || typeof userMessage !== "string") {
         return res.status(400).json({
-          error: "userMessage required",
+          error: "userMessage obrigatório",
         });
       }
 
@@ -641,7 +641,7 @@ export class AiController {
       if (!body?.sceneId || !body?.hex) {
         return res.status(400).json({
           error: "validation_error",
-          message: "sceneId and hex are required",
+          message: "sceneId e hex são obrigatórios",
         });
       }
       // Fast path if provider is local: avoid spawning MCP for latency in CI/E2E

@@ -50,21 +50,24 @@ export class CreatePaint {
     line?: string | null;
   }) {
     // Validation
-    if (!input.name?.trim()) throw new PaintValidationError("name is required");
+    if (!input.name?.trim())
+      throw new PaintValidationError("nome é obrigatório");
     if (!input.color?.trim())
-      throw new PaintValidationError("color is required");
+      throw new PaintValidationError("cor é obrigatória");
     if (!input.colorHex?.trim())
-      throw new PaintValidationError("colorHex is required");
+      throw new PaintValidationError("hex da cor é obrigatório");
     if (!input.surfaceType?.trim())
-      throw new PaintValidationError("surfaceType is required");
+      throw new PaintValidationError("tipo de superfície é obrigatório");
     if (!input.roomType?.trim())
-      throw new PaintValidationError("roomType is required");
+      throw new PaintValidationError("tipo de ambiente é obrigatório");
     if (!input.finish?.trim())
-      throw new PaintValidationError("finish is required");
+      throw new PaintValidationError("acabamento é obrigatório");
 
     // Check if embedding provider is available
     if (!this.embeddingProvider.isAvailable()) {
-      throw new EmbeddingGenerationError("Embedding provider is not available");
+      throw new EmbeddingGenerationError(
+        "Provedor de embedding não está disponível"
+      );
     }
 
     try {
@@ -81,9 +84,9 @@ export class CreatePaint {
         throw error;
       }
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+        error instanceof Error ? error.message : "Erro desconhecido";
       throw new EmbeddingGenerationError(
-        `Failed to generate embedding: ${errorMessage}`
+        `Falha ao gerar embedding: ${errorMessage}`
       );
     }
   }

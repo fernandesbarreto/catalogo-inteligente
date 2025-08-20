@@ -67,7 +67,7 @@ export const makePaintsController = (uc: any) => ({
         });
       }
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+        error instanceof Error ? error.message : "Erro desconhecido";
       res.status(500).json({
         error: "internal_error",
         message: errorMessage,
@@ -133,7 +133,7 @@ export const makePaintsController = (uc: any) => ({
       res.json(r);
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+        error instanceof Error ? error.message : "Erro desconhecido";
       res.status(500).json({
         error: "internal_error",
         message: errorMessage,
@@ -195,7 +195,7 @@ export const makePaintsController = (uc: any) => ({
         });
       }
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+        error instanceof Error ? error.message : "Erro desconhecido";
       res.status(500).json({
         error: "internal_error",
         message: errorMessage,
@@ -276,7 +276,7 @@ export const makePaintsController = (uc: any) => ({
         });
       }
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+        error instanceof Error ? error.message : "Erro desconhecido";
       res.status(500).json({
         error: "internal_error",
         message: errorMessage,
@@ -334,7 +334,7 @@ export const makePaintsController = (uc: any) => ({
         });
       }
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+        error instanceof Error ? error.message : "Erro desconhecido";
       res.status(500).json({
         error: "internal_error",
         message: errorMessage,

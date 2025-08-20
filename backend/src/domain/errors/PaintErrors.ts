@@ -1,6 +1,6 @@
 export class PaintNotFoundError extends Error {
   constructor(paintId: string) {
-    super(`Paint with id ${paintId} not found`);
+    super(`Tinta com id ${paintId} não encontrada`);
     this.name = "PaintNotFoundError";
   }
 }

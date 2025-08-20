@@ -76,7 +76,7 @@ export class MCPServer {
           error: {
             code: -32700,
             message: "Parse error",
-            data: error instanceof Error ? error.message : "Unknown error",
+            data: error instanceof Error ? error.message : "Erro desconhecido",
           },
         };
         console.log(JSON.stringify(errorResponse));
@@ -120,7 +120,7 @@ export class MCPServer {
         error: {
           code: -32603,
           message: "Internal error",
-          data: error instanceof Error ? error.message : "Unknown error",
+          data: error instanceof Error ? error.message : "Erro desconhecido",
         },
       };
     }
@@ -326,7 +326,7 @@ export class MCPServer {
           break;
 
         default:
-          throw new Error(`Tool '${name}' not found`);
+          throw new Error(`Ferramenta '${name}' não encontrada`);
       }
 
       const latency = Date.now() - startTime;
