@@ -240,12 +240,53 @@ export class RecommendationAgentWithMCP {
               request.sessionId
             );
           const environmentChanged =
-            currentSnapshot?.keywords?.environment !== keywords.environment;
+            currentSnapshot?.keywords?.environment !== keywords.environment &&
+            currentSnapshot?.keywords?.environment !== undefined; // Don't reset if previous was undefined
 
-          // If environment changed, prioritize the new environment
+          // If environment changed, reset all context except current query variables
           if (environmentChanged && keywords.environment) {
             console.log(
-              `[RecommendationAgent] Environment changed from ${currentSnapshot?.keywords?.environment} to ${keywords.environment}, updating session memory`
+              `[RecommendationAgent] Environment changed from ${currentSnapshot?.keywords?.environment} to ${keywords.environment}, resetting context`
+            );
+
+            // Reset all context variables except those from the current query
+            const currentQueryFilters = this.inferFiltersFromQuery(
+              request.query
+            );
+            const currentQueryKeywords = this.extractKeywordsFromCurrentQuery(
+              request.query
+            );
+
+            // Keep only current query variables, reset everything else
+            const resetKeywords = {
+              environment: keywords.environment, // Keep new environment
+              ...currentQueryKeywords, // Keep any keywords from current query
+            };
+
+            // Reset filters to only include current query filters
+            effectiveContext.filters = {
+              ...currentQueryFilters,
+              // Map environment to room type if present
+              ...(keywords.environment
+                ? this.mapEnvironmentToRoomType(keywords.environment)
+                : {}),
+            };
+
+            // Reset session memory
+            await RecommendationAgentWithMCP.sessionMemory.set(
+              request.sessionId,
+              {
+                filters: effectiveContext.filters,
+                keywords: resetKeywords,
+                lastQuery: effectiveQuery,
+                lastPicks: combined.map((p) => ({
+                  id: p.id,
+                  reason: p.reason,
+                })),
+                nextOffset: 0, // Reset offset for new environment
+                seenIds: [], // Reset seen IDs for new environment
+                lastUpdatedAt: Date.now(),
+              }
             );
           }
 
@@ -487,5 +528,112 @@ export class RecommendationAgentWithMCP {
     const combinedArray = Array.from(combinedMap.values());
     combinedArray.sort((a, b) => (b.rrfScore || 0) - (a.rrfScore || 0));
     return combinedArray;
+  }
+
+  private extractKeywordsFromCurrentQuery(query: string): {
+    color?: string;
+    style?: string;
+    mood?: string;
+    keywords?: string[];
+  } {
+    const q = query.toLowerCase();
+    const keywords: any = {};
+
+    // Extract color from current query
+    const colorPatterns = {
+      branco: /\b(branco|branca|white)\b/,
+      preto: /\b(preto|preta|black)\b/,
+      azul: /\b(azul|blue)\b/,
+      vermelho: /\b(vermelho|vermelha|red)\b/,
+      verde: /\b(verde|green)\b/,
+      amarelo: /\b(amarelo|amarela|yellow)\b/,
+      rosa: /\b(rosa|pink)\b/,
+      marrom: /\b(marrom|brown)\b/,
+      laranja: /\b(laranja|orange)\b/,
+      bege: /\b(bege|beige)\b/,
+      roxo: /\b(roxo|purple|violeta|violet)\b/,
+      cinza: /\b(cinza|gray|grey)\b/,
+      turquesa: /\b(turquesa|turquoise)\b/,
+      coral: /\b(coral|salmão|salmon)\b/,
+      dourado: /\b(dourado|gold)\b/,
+      prateado: /\b(prateado|silver)\b/,
+      vinho: /\b(vinho|wine|burgundy)\b/,
+      jade: /\b(jade)\b/,
+      aqua: /\b(aqua)\b/,
+      ciano: /\b(ciano|teal)\b/,
+    };
+
+    for (const [color, pattern] of Object.entries(colorPatterns)) {
+      if (pattern.test(q)) {
+        keywords.color = color;
+        break;
+      }
+    }
+
+    // Extract style from current query
+    const stylePatterns = {
+      moderno: /\b(moderno|moderna|contemporâneo|contemporânea)\b/,
+      classico: /\b(clássico|clássica|tradicional)\b/,
+      minimalista: /\b(minimalista|minimalismo)\b/,
+      rustico: /\b(rústico|rústica|country)\b/,
+      industrial: /\b(industrial|industrializado)\b/,
+      escandinavo: /\b(escandinavo|escandinava|nórdico|nórdica)\b/,
+      bohemio: /\b(boêmio|boêmia|bohemian)\b/,
+      vintage: /\b(vintage|retrô|retro)\b/,
+      luxuoso: /\b(luxuoso|luxuosa|luxury)\b/,
+      clean: /\b(clean|limpo|limpa)\b/,
+    };
+
+    for (const [style, pattern] of Object.entries(stylePatterns)) {
+      if (pattern.test(q)) {
+        keywords.style = style;
+        break;
+      }
+    }
+
+    // Extract mood from current query
+    const moodPatterns = {
+      tranquilo: /\b(tranquilo|tranquila|calmo|calma|sereno|serena)\b/,
+      energetico: /\b(energético|energética|vibrante|dinâmico|dinâmica)\b/,
+      acolhedor: /\b(acolhedor|acolhedora|aconchegante|warm)\b/,
+      elegante: /\b(elegante|sofisticado|sofisticada)\b/,
+      romantico: /\b(romântico|romântica|romance)\b/,
+      profissional: /\b(profissional|corporativo|corporativa)\b/,
+      divertido: /\b(divertido|divertida|alegre|colorido|colorida)\b/,
+      neutro: /\b(neutro|neutra|neutro)\b/,
+    };
+
+    for (const [mood, pattern] of Object.entries(moodPatterns)) {
+      if (pattern.test(q)) {
+        keywords.mood = mood;
+        break;
+      }
+    }
+
+    // Extract additional keywords from current query
+    const additionalKeywords = [];
+    const keywordPatterns = [
+      /\b(iluminação|luz|clara|escura)\b/,
+      /\b(textura|texturizado|liso|rugoso)\b/,
+      /\b(acabamento|fosco|acetinado|brilhante|semibrilho)\b/,
+      /\b(linha|premium|standard|econômica)\b/,
+      /\b(durabilidade|resistente|lavável|lavavel)\b/,
+      /\b(eco|sustentável|natural)\b/,
+      /\b(antialérgico|antibacteriano)\b/,
+      /\b(clean|limpo|limpa)\b/,
+    ];
+
+    for (const pattern of keywordPatterns) {
+      const match = q.match(pattern);
+      if (match) {
+        additionalKeywords.push(match[0]);
+      }
+    }
+
+    if (additionalKeywords.length > 0) {
+      keywords.keywords = [...new Set(additionalKeywords)];
+    }
+
+    return keywords;
   }
 }

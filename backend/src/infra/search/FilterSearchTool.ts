@@ -93,7 +93,9 @@ export class FilterSearchTool implements ISearchTool {
       }
     }
 
-    // Text search in relevant fields
+    // Build search conditions for text query
+    const searchConditions: any[] = [];
+
     if (query.trim()) {
       const queryLower = query.toLowerCase();
       const queryWords = queryLower
@@ -113,9 +115,6 @@ export class FilterSearchTool implements ISearchTool {
           }
         }
       }
-
-      // Build broader search conditions
-      const searchConditions = [];
 
       // If we found color variations, add color search
       if (colorVariations.length > 0) {
@@ -152,7 +151,7 @@ export class FilterSearchTool implements ISearchTool {
 
       // Combine filters with search conditions
       if (filterConditions.length > 0) {
-        // If there are filters, use AND to combine filters with OR of search conditions
+        // Use AND to combine filters for precise results
         where.AND = [{ OR: searchConditions }, ...filterConditions];
       } else {
         // If there are no filters, use only OR for search conditions
@@ -166,14 +165,41 @@ export class FilterSearchTool implements ISearchTool {
       where.AND = filterConditions;
     }
 
-    const paints = await this.prisma.paint.findMany({
+    // Try AND logic first for precise results
+    let paints = await this.prisma.paint.findMany({
       where,
       take: 10,
       skip: offset,
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(`[FilterSearchTool] Found ${paints.length} results`);
+    console.log(`[FilterSearchTool] AND search found ${paints.length} results`);
+
+    // If no results with AND, try OR logic for broader results
+    if (paints.length === 0 && filterConditions.length > 0) {
+      console.log(`[FilterSearchTool] No results with AND, trying OR logic`);
+
+      const orWhere: any = {};
+
+      if (query.trim()) {
+        // Combine filters with search conditions using OR
+        orWhere.OR = [...filterConditions, ...searchConditions];
+      } else {
+        // If there's no query but there are filters, search only by filters with OR
+        orWhere.OR = filterConditions;
+      }
+
+      paints = await this.prisma.paint.findMany({
+        where: orWhere,
+        take: 10,
+        skip: offset,
+        orderBy: { createdAt: "desc" },
+      });
+
+      console.log(
+        `[FilterSearchTool] OR search found ${paints.length} results`
+      );
+    }
 
     let picks = paints.map((paint) => ({
       id: paint.id,
