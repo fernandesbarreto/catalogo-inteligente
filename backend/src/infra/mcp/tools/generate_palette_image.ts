@@ -5,6 +5,21 @@ import { generatePaletteImageFast } from "./generate_palette_image_fast";
 import { GenInput, GenOutput } from "../../../domain/images/types";
 import { hexToColorName } from "./hexToColor";
 
+// Mapeia ambiente das keywords para sceneId
+function mapEnvironmentToSceneId(environment?: string): string {
+  const environmentMap: Record<string, string> = {
+    sala: "sala/01",
+    quarto: "quarto/01", 
+    cozinha: "cozinha/01",
+    banheiro: "banheiro/01",
+    varanda: "varanda/01",
+    escritorio: "escritorio/01",
+    corredor: "corredor/01",
+  };
+  
+  return environmentMap[environment || "sala"] || "sala/01"; // default é sala
+}
+
 const getAssetsDir = () =>
   process.env.ASSETS_SCENES_DIR ||
   path.resolve(__dirname, "../../../assets/scenes");

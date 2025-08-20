@@ -102,12 +102,18 @@ export class AiController {
             userMessage + history.map((h) => h.content).join(" ")
           );
 
+          // Extrair ambiente da mensagem
+          const environment = this.extractEnvironmentFromMessage(
+            userMessage + history.map((h) => h.content).join(" ")
+          );
+          const sceneId = `${environment}/01`;
+
           // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
           toolRes = await Promise.race([
             mcp.callTool({
               name: "generate_palette_image",
               arguments: {
-                sceneId: "varanda/moderna-01",
+                sceneId,
                 hex: hex,
                 size: "1024x1024",
               },
@@ -431,6 +437,27 @@ export class AiController {
     }
 
     return "#5FA3D1"; // fallback para azul médio
+  }
+
+  private extractEnvironmentFromMessage(message: string): string {
+    const environmentPatterns = {
+      sala: /\b(sala|living|estar)\b/,
+      quarto: /\b(quarto|bedroom|dormitório)\b/,
+      cozinha: /\b(cozinha|kitchen)\b/,
+      banheiro: /\b(banheiro|bathroom|wc)\b/,
+      varanda: /\b(varanda|balcony|sacada)\b/,
+      escritorio: /\b(escritório|office|estudo)\b/,
+      corredor: /\b(corredor|hall|passagem)\b/,
+    };
+
+    const lowerMessage = message.toLowerCase();
+    for (const [env, pattern] of Object.entries(environmentPatterns)) {
+      if (pattern.test(lowerMessage)) {
+        return env;
+      }
+    }
+
+    return "sala"; // default
   }
 
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {

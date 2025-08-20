@@ -176,8 +176,16 @@ NÃO use markdown. Apenas o JSON puro.`;
           hex = colorToHexMap[input.keywords.color];
         }
 
+        // Mapear ambiente das keywords para sceneId
+        const sceneId = input.keywords?.environment 
+          ? `${input.keywords.environment}/01` 
+          : "sala/01"; // default é sala
+        
+        console.error(`[intelligentToolRouter] 🏠 Ambiente extraído: ${input.keywords?.environment || 'sala (default)'}`);
+        console.error(`[intelligentToolRouter] 🎬 SceneId final: ${sceneId}`);
+        
         baseAction.args = {
-          sceneId: "varanda/moderna-01", // padrão
+          sceneId,
           ...(hex ? { hex } : {}),
           size: IMAGE_SIZE_DEFAULT,
         };
@@ -517,8 +525,16 @@ async function toolRouterFallback(
 
   // Route: Image generation when preview/visualization requested or scene/hex provided
   if (wantsImageGeneration(combined) || normalizedHex || maybeSceneId) {
+    // Mapear ambiente das keywords para sceneId no fallback também
+    const sceneId = input.keywords?.environment 
+      ? `${input.keywords.environment}/01` 
+      : maybeSceneId || "sala/01"; // default é sala
+    
+    console.error(`[toolRouterFallback] 🏠 Fallback: Ambiente extraído: ${input.keywords?.environment || 'sala (default)'}`);
+    console.error(`[toolRouterFallback] 🎬 Fallback: SceneId final: ${sceneId}`);
+    
     const args: Record<string, any> = {
-      sceneId: maybeSceneId || "varanda/moderna-01",
+      sceneId,
       ...(normalizedHex ? { hex: normalizedHex } : {}),
       size: IMAGE_SIZE_DEFAULT,
     };
