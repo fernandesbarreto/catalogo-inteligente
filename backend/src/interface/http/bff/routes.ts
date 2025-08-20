@@ -38,6 +38,11 @@ import { requireRole } from "../middlewares/requireRole";
 const router = Router();
 const prisma = new PrismaClient();
 
+// Initialize repositories
+const userRepo = new UserRepoPrisma(prisma);
+const paintRepo = new PaintRepoPrisma(prisma);
+
+// PUBLIC ROUTES (no authentication required)
 // Swagger documentation
 router.use("/docs", swaggerUi.serve);
 router.get(
@@ -52,18 +57,9 @@ router.get("/docs/swagger.json", (req, res) => {
   res.send(specs);
 });
 
-const userRepo = new UserRepoPrisma(prisma);
-const paintRepo = new PaintRepoPrisma(prisma);
-
 // AUTH
 const authCtl = makeAuthController(new Login(userRepo));
 router.post("/auth/login", authCtl.login);
-
-// AI ROUTES
-router.use("/ai", aiRoutes);
-
-// MCP ROUTES
-router.use("/mcp", mcpRoutes);
 
 // PUBLIC PAINTS ENDPOINT (for browsing)
 const publicPaintsCtl = makePaintsController({
@@ -77,7 +73,16 @@ const publicPaintsCtl = makePaintsController({
 router.get("/paints/public", publicPaintsCtl.list);
 router.get("/paints/public/:id", publicPaintsCtl.get);
 
+// GLOBAL AUTHENTICATION MIDDLEWARE
 router.use(requireAuth, attachRoles);
+
+// PROTECTED ROUTES (authentication required)
+
+// AI ROUTES
+router.use("/ai", aiRoutes);
+
+// MCP ROUTES
+router.use("/mcp", mcpRoutes);
 
 // USERS (somente ADMIN)
 const usersCtl = makeUsersController({

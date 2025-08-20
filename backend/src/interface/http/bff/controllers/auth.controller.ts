@@ -47,8 +47,25 @@ export const makeAuthController = (loginUC: any) => ({
    *               $ref: '#/components/schemas/Error'
    */
   login: async (req: Request, res: Response) => {
-    const body = loginSchema.parse(req.body);
-    const out = await loginUC.exec(body);
-    res.status(200).json(out);
+    try {
+      const body = loginSchema.parse(req.body);
+      const out = await loginUC.exec(body);
+      res.status(200).json(out);
+    } catch (error: any) {
+      if (error.status === 401) {
+        return res.status(401).json({
+          error: "invalid_credentials",
+          message: "Email ou senha incorretos",
+        });
+      }
+      if (error.status === 400) {
+        return res.status(400).json({
+          error: "invalid_request",
+          message: "Dados de login inválidos",
+        });
+      }
+      // Re-throw other errors to be handled by the global error handler
+      throw error;
+    }
   },
 });
