@@ -171,6 +171,6 @@ describe("RecommendationAgent", () => {
     });
 
     expect(result.picks).toHaveLength(0);
-    expect(result.notes).toContain("Erro ao processar");
+    expect(result.notes).toContain("Error processing");
   });
 });

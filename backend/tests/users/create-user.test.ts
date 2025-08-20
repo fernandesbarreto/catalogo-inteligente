@@ -27,7 +27,7 @@ describe("CreateUser use case", () => {
 
     await expect(
       useCase.exec({ email: "", password: "abc123" })
-    ).rejects.toThrow(/invalid email/i);
+    ).rejects.toThrow("Email inválido");
   });
 
   it("Should fail if password is less than 6 characters", async () => {
@@ -36,6 +36,6 @@ describe("CreateUser use case", () => {
 
     await expect(
       useCase.exec({ email: "ok@example.com", password: "123" })
-    ).rejects.toThrow(/password/i);
+    ).rejects.toThrow("Senha deve ter pelo menos 6 caracteres");
   });
 });
