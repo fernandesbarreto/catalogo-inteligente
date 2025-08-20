@@ -98,7 +98,9 @@ export class AiController {
       try {
         if (imageOnly) {
           // Extrair cor da mensagem do usuário
-          const hex = this.extractColorFromMessage(userMessage);
+          const hex = this.extractColorFromMessage(
+            userMessage + history.map((h) => h.content).join(" ")
+          );
 
           // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
           toolRes = await Promise.race([
@@ -151,7 +153,7 @@ export class AiController {
       response.message = (payload?.reply || response.message || "").trim();
       if (!response.message) {
         response.message =
-          "Pronto! Gerei a prévia com a parede pintada. Quer ajustar cena, acabamento ou tom?";
+          "Pronto! Gerei a prévia com a parede pintada. Precisa de tinta para mais alguma coisa?";
       }
 
       if (imageBase64) {
