@@ -21,7 +21,7 @@ export class FilterSearchTool implements ISearchTool {
     const where: any = {};
     const offset = (filters as any)?.offset ?? 0;
 
-    // Aplicar filtros específicos no SQL quando existirem
+    // Apply specific filters in SQL when they exist
     const filterConditions: any[] = [];
 
     if (filters?.surfaceType) {
@@ -60,135 +60,10 @@ export class FilterSearchTool implements ISearchTool {
       const color = (filters as any).color as string;
       const colorLower = color.toLowerCase();
 
-      // Mapeamento de cores para incluir variações e sinônimos
-      const colorMappings: { [key: string]: string[] } = {
-        // Brancos
-        branco: ["branco", "white", "branca"],
-        branca: ["branca", "white", "branco"],
-        white: ["white", "branco", "branca"],
+      // Color mapping to include variations and synonyms
+      const colorMappings = this.getColorMappings();
 
-        // Pretos
-        preto: ["preto", "black", "preta"],
-        preta: ["preta", "black", "preto"],
-        black: ["black", "preto", "preta"],
-
-        // Azuis e variações
-        azul: [
-          "azul",
-          "blue",
-          "anil",
-          "ciano",
-          "céu",
-          "aqua",
-          "turquesa",
-          "índigo",
-        ],
-        blue: [
-          "blue",
-          "azul",
-          "anil",
-          "ciano",
-          "céu",
-          "aqua",
-          "turquesa",
-          "índigo",
-        ],
-        anil: ["anil", "azul", "blue", "ciano", "índigo"],
-        ciano: ["ciano", "azul", "blue", "anil", "aqua"],
-        céu: ["céu", "azul", "blue", "ciano"],
-        aqua: ["aqua", "azul", "blue", "ciano", "turquesa"],
-        turquesa: ["turquesa", "azul", "blue", "aqua"],
-        índigo: ["índigo", "azul", "blue", "anil"],
-
-        // Vermelhos e variações
-        vermelho: ["vermelho", "red", "vermelha", "coral", "vinho", "salmão"],
-        red: ["red", "vermelho", "vermelha", "coral", "vinho", "salmão"],
-        vermelha: ["vermelha", "red", "vermelho", "coral", "vinho"],
-        coral: ["coral", "vermelho", "red", "salmão"],
-        vinho: ["vinho", "vermelho", "red", "coral"],
-        salmão: ["salmão", "vermelho", "red", "coral"],
-
-        // Verdes e variações
-        verde: [
-          "verde",
-          "green",
-          "esmeralda",
-          "jade",
-          "oliva",
-          "lima",
-          "turmalina",
-        ],
-        green: [
-          "green",
-          "verde",
-          "esmeralda",
-          "jade",
-          "oliva",
-          "lima",
-          "turmalina",
-        ],
-        esmeralda: ["esmeralda", "verde", "green", "jade"],
-        jade: ["jade", "verde", "green", "esmeralda"],
-        oliva: ["oliva", "verde", "green"],
-        lima: ["lima", "verde", "green"],
-        turmalina: ["turmalina", "verde", "green"],
-
-        // Amarelos e variações
-        amarelo: [
-          "amarelo",
-          "yellow",
-          "amarela",
-          "âmbar",
-          "mostarda",
-          "dourado",
-        ],
-        yellow: [
-          "yellow",
-          "amarelo",
-          "amarela",
-          "âmbar",
-          "mostarda",
-          "dourado",
-        ],
-        amarela: ["amarela", "yellow", "amarelo", "âmbar", "mostarda"],
-        âmbar: ["âmbar", "amarelo", "yellow", "mostarda", "dourado"],
-        mostarda: ["mostarda", "amarelo", "yellow", "âmbar"],
-        dourado: ["dourado", "amarelo", "yellow", "âmbar"],
-
-        // Roxos e variações
-        roxo: ["roxo", "purple", "violeta", "fúcsia", "ameixa"],
-        purple: ["purple", "roxo", "violeta", "fúcsia", "ameixa"],
-        violeta: ["violeta", "roxo", "purple", "fúcsia"],
-        fúcsia: ["fúcsia", "roxo", "purple", "violeta", "ameixa"],
-        ameixa: ["ameixa", "roxo", "purple", "fúcsia"],
-
-        // Laranjas e variações
-        laranja: ["laranja", "orange", "terracota", "cobre"],
-        orange: ["orange", "laranja", "terracota", "cobre"],
-        terracota: ["terracota", "laranja", "orange"],
-        cobre: ["cobre", "laranja", "orange"],
-
-        // Marrons e variações
-        marrom: ["marrom", "brown", "bronze"],
-        brown: ["brown", "marrom", "bronze"],
-        bronze: ["bronze", "marrom", "brown"],
-
-        // Beges
-        bege: ["bege", "beige"],
-        beige: ["beige", "bege"],
-
-        // Cinzas e variações
-        cinza: ["cinza", "gray", "grey", "grafite"],
-        gray: ["gray", "cinza", "grey", "grafite"],
-        grey: ["grey", "cinza", "gray", "grafite"],
-        grafite: ["grafite", "cinza", "gray", "grey"],
-
-        // Rosa
-        rosa: ["rosa", "pink"],
-        pink: ["pink", "rosa"],
-      };
-
-      // Verificar se há variações de cor para expandir a busca
+      // Check if there are color variations to expand the search
       let colorVariations: string[] = [];
       for (const [colorKey, variations] of Object.entries(colorMappings)) {
         if (colorLower === colorKey || variations.includes(colorLower)) {
@@ -198,7 +73,7 @@ export class FilterSearchTool implements ISearchTool {
       }
 
       if (colorVariations.length > 0) {
-        // Usar variações de cor para busca mais abrangente
+        // Use color variations for broader search
         filterConditions.push({
           OR: colorVariations.map((colorVar) => ({
             color: {
@@ -208,7 +83,7 @@ export class FilterSearchTool implements ISearchTool {
           })),
         });
       } else {
-        // Busca direta se não há variações
+        // Direct search if no variations
         filterConditions.push({
           color: {
             contains: color,
@@ -218,156 +93,30 @@ export class FilterSearchTool implements ISearchTool {
       }
     }
 
-    // Busca por texto nos campos relevantes
+    // Build search conditions for text query
+    const searchConditions: any[] = [];
+
     if (query.trim()) {
       const queryLower = query.toLowerCase();
       const queryWords = queryLower
         .split(/\s+/)
         .filter((word) => word.length > 0);
 
-      // Encontrar mapeamento de cores para a query (fallback)
+      // Find color mapping for query (fallback)
       let colorVariations: string[] = [];
       if (!(filters as any)?.color) {
-        // Mapeamento de cores para incluir variações e sinônimos
-        const colorMappings: { [key: string]: string[] } = {
-          // Brancos
-          branco: ["branco", "white", "branca"],
-          branca: ["branca", "white", "branco"],
-          white: ["white", "branco", "branca"],
-
-          // Pretos
-          preto: ["preto", "black", "preta"],
-          preta: ["preta", "black", "preto"],
-          black: ["black", "preto", "preta"],
-
-          // Azuis e variações
-          azul: [
-            "azul",
-            "blue",
-            "anil",
-            "ciano",
-            "céu",
-            "aqua",
-            "turquesa",
-            "índigo",
-          ],
-          blue: [
-            "blue",
-            "azul",
-            "anil",
-            "ciano",
-            "céu",
-            "aqua",
-            "turquesa",
-            "índigo",
-          ],
-          anil: ["anil", "azul", "blue", "ciano", "índigo"],
-          ciano: ["ciano", "azul", "blue", "anil", "aqua"],
-          céu: ["céu", "azul", "blue", "ciano"],
-          aqua: ["aqua", "azul", "blue", "ciano", "turquesa"],
-          turquesa: ["turquesa", "azul", "blue", "aqua"],
-          índigo: ["índigo", "azul", "blue", "anil"],
-
-          // Vermelhos e variações
-          vermelho: ["vermelho", "red", "vermelha", "coral", "vinho", "salmão"],
-          red: ["red", "vermelho", "vermelha", "coral", "vinho", "salmão"],
-          vermelha: ["vermelha", "red", "vermelho", "coral", "vinho"],
-          coral: ["coral", "vermelho", "red", "salmão"],
-          vinho: ["vinho", "vermelho", "red", "coral"],
-          salmão: ["salmão", "vermelho", "red", "coral"],
-
-          // Verdes e variações
-          verde: [
-            "verde",
-            "green",
-            "esmeralda",
-            "jade",
-            "oliva",
-            "lima",
-            "turmalina",
-          ],
-          green: [
-            "green",
-            "verde",
-            "esmeralda",
-            "jade",
-            "oliva",
-            "lima",
-            "turmalina",
-          ],
-          esmeralda: ["esmeralda", "verde", "green", "jade"],
-          jade: ["jade", "verde", "green", "esmeralda"],
-          oliva: ["oliva", "verde", "green"],
-          lima: ["lima", "verde", "green"],
-          turmalina: ["turmalina", "verde", "green"],
-
-          // Amarelos e variações
-          amarelo: [
-            "amarelo",
-            "yellow",
-            "amarela",
-            "âmbar",
-            "mostarda",
-            "dourado",
-          ],
-          yellow: [
-            "yellow",
-            "amarelo",
-            "amarela",
-            "âmbar",
-            "mostarda",
-            "dourado",
-          ],
-          amarela: ["amarela", "yellow", "amarelo", "âmbar", "mostarda"],
-          âmbar: ["âmbar", "amarelo", "yellow", "mostarda", "dourado"],
-          mostarda: ["mostarda", "amarelo", "yellow", "âmbar"],
-          dourado: ["dourado", "amarelo", "yellow", "âmbar"],
-
-          // Roxos e variações
-          roxo: ["roxo", "purple", "violeta", "fúcsia", "ameixa"],
-          purple: ["purple", "roxo", "violeta", "fúcsia", "ameixa"],
-          violeta: ["violeta", "roxo", "purple", "fúcsia"],
-          fúcsia: ["fúcsia", "roxo", "purple", "violeta", "ameixa"],
-          ameixa: ["ameixa", "roxo", "purple", "fúcsia"],
-
-          // Laranjas e variações
-          laranja: ["laranja", "orange", "terracota", "cobre"],
-          orange: ["orange", "laranja", "terracota", "cobre"],
-          terracota: ["terracota", "laranja", "orange"],
-          cobre: ["cobre", "laranja", "orange"],
-
-          // Marrons e variações
-          marrom: ["marrom", "brown", "bronze"],
-          brown: ["brown", "marrom", "bronze"],
-          bronze: ["bronze", "marrom", "brown"],
-
-          // Beges
-          bege: ["bege", "beige"],
-          beige: ["beige", "bege"],
-
-          // Cinzas e variações
-          cinza: ["cinza", "gray", "grey", "grafite"],
-          gray: ["gray", "cinza", "grey", "grafite"],
-          grey: ["grey", "cinza", "gray", "grafite"],
-          grafite: ["grafite", "cinza", "gray", "grey"],
-
-          // Rosa
-          rosa: ["rosa", "pink"],
-          pink: ["pink", "rosa"],
-        };
+        // Use the same color mapping as above
+        const colorMappings = this.getColorMappings();
 
         for (const [colorKey, variations] of Object.entries(colorMappings)) {
           if (queryLower.includes(colorKey)) {
-            colorVariations = variations;
+            colorVariations = variations as string[];
             break;
           }
         }
       }
 
-      // Construir condições de busca mais abrangentes
-      const searchConditions = [];
-
-      // Se encontramos variações de cor, adicionar busca por cor
+      // If we found color variations, add color search
       if (colorVariations.length > 0) {
         searchConditions.push(
           ...colorVariations.map((color) => ({
@@ -379,7 +128,7 @@ export class FilterSearchTool implements ISearchTool {
         );
       }
 
-      // Buscar por cada palavra individualmente em todos os campos relevantes
+      // Search for each word individually in all relevant fields
       for (const word of queryWords) {
         searchConditions.push(
           { name: { contains: word, mode: "insensitive" } },
@@ -391,7 +140,7 @@ export class FilterSearchTool implements ISearchTool {
         );
       }
 
-      // Se não há variações de cor específicas, também buscar por cor direta
+      // If there are no specific color variations, also search by direct color
       if (colorVariations.length === 0) {
         for (const word of queryWords) {
           searchConditions.push({
@@ -400,37 +149,64 @@ export class FilterSearchTool implements ISearchTool {
         }
       }
 
-      // Combinar filtros com condições de busca
+      // Combine filters with search conditions
       if (filterConditions.length > 0) {
-        // Se há filtros, usar AND para combinar filtros com OR das condições de busca
+        // Use AND to combine filters for precise results
         where.AND = [{ OR: searchConditions }, ...filterConditions];
       } else {
-        // Se não há filtros, usar apenas OR para as condições de busca
+        // If there are no filters, use only OR for search conditions
         where.OR = searchConditions;
       }
     }
 
-    // Se não há query mas há filtros, buscar apenas por filtros
+    // If there's no query but there are filters, search only by filters
     if (!query.trim() && filterConditions.length > 0) {
-      console.log(`[FilterSearchTool] Buscando apenas por filtros:`, filters);
+      console.log(`[FilterSearchTool] Searching only by filters:`, filters);
       where.AND = filterConditions;
     }
 
-    const paints = await this.prisma.paint.findMany({
+    // Try AND logic first for precise results
+    let paints = await this.prisma.paint.findMany({
       where,
       take: 10,
       skip: offset,
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(`[FilterSearchTool] Encontrados ${paints.length} resultados`);
+    console.log(`[FilterSearchTool] AND search found ${paints.length} results`);
+
+    // If no results with AND, try OR logic for broader results
+    if (paints.length === 0 && filterConditions.length > 0) {
+      console.log(`[FilterSearchTool] No results with AND, trying OR logic`);
+
+      const orWhere: any = {};
+
+      if (query.trim()) {
+        // Combine filters with search conditions using OR
+        orWhere.OR = [...filterConditions, ...searchConditions];
+      } else {
+        // If there's no query but there are filters, search only by filters with OR
+        orWhere.OR = filterConditions;
+      }
+
+      paints = await this.prisma.paint.findMany({
+        where: orWhere,
+        take: 10,
+        skip: offset,
+        orderBy: { createdAt: "desc" },
+      });
+
+      console.log(
+        `[FilterSearchTool] OR search found ${paints.length} results`
+      );
+    }
 
     let picks = paints.map((paint) => ({
       id: paint.id,
-      reason: `Filtro: ${paint.name} - ${paint.color} (${paint.surfaceType}, ${paint.roomType}, ${paint.finish})`,
+      reason: `Filter: ${paint.name} - ${paint.color} (${paint.surfaceType}, ${paint.roomType}, ${paint.finish})`,
     }));
 
-    // Excluir IDs já vistos (se enviados)
+    // Exclude already seen IDs (if sent)
     const exclude = ((filters as any)?.excludeIds as string[]) || [];
     if (exclude.length > 0) {
       const excl = new Set(exclude);
@@ -438,5 +214,120 @@ export class FilterSearchTool implements ISearchTool {
     }
 
     return picks;
+  }
+
+  private getColorMappings(): { [key: string]: string[] } {
+    return {
+      // Whites
+      branco: ["branco", "white", "branca"],
+      branca: ["branca", "white", "branco"],
+      white: ["white", "branco", "branca"],
+
+      // Blacks
+      preto: ["preto", "black", "preta"],
+      preta: ["preta", "black", "preto"],
+      black: ["black", "preto", "preta"],
+
+      // Blues and variations
+      azul: [
+        "azul",
+        "blue",
+        "anil",
+        "ciano",
+        "céu",
+        "aqua",
+        "turquesa",
+        "índigo",
+      ],
+      blue: [
+        "blue",
+        "azul",
+        "anil",
+        "ciano",
+        "céu",
+        "aqua",
+        "turquesa",
+        "índigo",
+      ],
+      anil: ["anil", "azul", "blue", "ciano", "índigo"],
+      ciano: ["ciano", "azul", "blue", "anil", "aqua"],
+      céu: ["céu", "azul", "blue", "ciano"],
+      aqua: ["aqua", "azul", "blue", "ciano", "turquesa"],
+      turquesa: ["turquesa", "azul", "blue", "aqua"],
+      índigo: ["índigo", "azul", "blue", "anil"],
+
+      // Reds and variations
+      vermelho: ["vermelho", "red", "vermelha", "coral", "vinho", "salmão"],
+      red: ["red", "vermelho", "vermelha", "coral", "vinho", "salmão"],
+      vermelha: ["vermelha", "red", "vermelho", "coral", "vinho"],
+      coral: ["coral", "vermelho", "red", "salmão"],
+      vinho: ["vinho", "vermelho", "red", "coral"],
+      salmão: ["salmão", "vermelho", "red", "coral"],
+
+      // Greens and variations
+      verde: [
+        "verde",
+        "green",
+        "esmeralda",
+        "jade",
+        "oliva",
+        "lima",
+        "turmalina",
+      ],
+      green: [
+        "green",
+        "verde",
+        "esmeralda",
+        "jade",
+        "oliva",
+        "lima",
+        "turmalina",
+      ],
+      esmeralda: ["esmeralda", "verde", "green", "jade"],
+      jade: ["jade", "verde", "green", "esmeralda"],
+      oliva: ["oliva", "verde", "green"],
+      lima: ["lima", "verde", "green"],
+      turmalina: ["turmalina", "verde", "green"],
+
+      // Yellows and variations
+      amarelo: ["amarelo", "yellow", "amarela", "âmbar", "mostarda", "dourado"],
+      yellow: ["yellow", "amarelo", "amarela", "âmbar", "mostarda", "dourado"],
+      amarela: ["amarela", "yellow", "amarelo", "âmbar", "mostarda"],
+      âmbar: ["âmbar", "amarelo", "yellow", "mostarda", "dourado"],
+      mostarda: ["mostarda", "amarelo", "yellow", "âmbar"],
+      dourado: ["dourado", "amarelo", "yellow", "âmbar"],
+
+      // Purples and variations
+      roxo: ["roxo", "purple", "violeta", "fúcsia", "ameixa"],
+      purple: ["purple", "roxo", "violeta", "fúcsia", "ameixa"],
+      violeta: ["violeta", "roxo", "purple", "fúcsia"],
+      fúcsia: ["fúcsia", "roxo", "purple", "violeta", "ameixa"],
+      ameixa: ["ameixa", "roxo", "purple", "fúcsia"],
+
+      // Oranges and variations
+      laranja: ["laranja", "orange", "terracota", "cobre"],
+      orange: ["orange", "laranja", "terracota", "cobre"],
+      terracota: ["terracota", "laranja", "orange"],
+      cobre: ["cobre", "laranja", "orange"],
+
+      // Browns and variations
+      marrom: ["marrom", "brown", "bronze"],
+      brown: ["brown", "marrom", "bronze"],
+      bronze: ["bronze", "marrom", "brown"],
+
+      // Beiges
+      bege: ["bege", "beige"],
+      beige: ["beige", "bege"],
+
+      // Grays and variations
+      cinza: ["cinza", "gray", "grey", "grafite"],
+      gray: ["gray", "cinza", "grey", "grafite"],
+      grey: ["grey", "cinza", "gray", "grafite"],
+      grafite: ["grafite", "cinza", "gray", "grey"],
+
+      // Pink
+      rosa: ["rosa", "pink"],
+      pink: ["pink", "rosa"],
+    };
   }
 }

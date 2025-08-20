@@ -14,18 +14,13 @@ export const useChat = (token?: string | null) => {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
 
-  // Ensure a persistent session id for chat memory
+  // Generate a new session id on each page load to clear history
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("paint-chat-session");
-      if (stored) {
-        setSessionId(stored);
-      } else {
-        const id =
-          window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-        localStorage.setItem("paint-chat-session", id);
-        setSessionId(id);
-      }
+      // Always generate a new session ID on page load
+      const id =
+        window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      setSessionId(id);
     } catch {
       // Fallback non-persistent
       if (!sessionId) setSessionId(`${Date.now()}-${Math.random()}`);
@@ -83,7 +78,7 @@ export const useChat = (token?: string | null) => {
 
       const data: any = await response.json();
 
-      // Preferir mensagem natural gerada no BFF quando disponível
+      // Prefer natural message generated in BFF when available
       let botContent = data.message as string;
 
       if (!botContent) {

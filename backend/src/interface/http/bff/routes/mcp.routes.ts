@@ -7,16 +7,16 @@ const mcpController = new MCPController();
 const agent = new RecommendationAgentWithMCP();
 agent.initialize();
 
-// Health check do MCP
+// MCP health check
 router.get("/health", (req, res) => mcpController.health(req, res));
 
-// Listar ferramentas disponíveis
+// List available tools
 router.get("/tools", (req, res) => mcpController.getTools(req, res));
 
-// Fazer recomendação usando MCP
+// Make recommendation using MCP
 router.post("/recommend", (req, res) => mcpController.recommend(req, res));
 
-// Resetar memória de sessão (stateless via header)
+// Reset session memory (stateless via header)
 router.post("/session/reset", async (req, res) => {
   try {
     const sessionId =
@@ -26,9 +26,9 @@ router.post("/session/reset", async (req, res) => {
         .status(400)
         .json({ success: false, error: "Missing x-session-id" });
     }
-    // A SessionMemory é interna ao agente; reinitialize limpa in-memory fallback, mas para Redis usamos TTL (não precisamos deletar
-    // explicitamente aqui). Para in-memory: recriar memory garantindo mapa limpo desta sessão.
-    // Implementação simples: set snapshot vazio com TTL (vai expirar) e zera filtros.
+    // SessionMemory is internal to the agent; reinitialize clears in-memory fallback, but for Redis we use TTL (we don't need to delete
+    // explicitly here). For in-memory: recreate memory ensuring clean map for this session.
+    // Simple implementation: set empty snapshot with TTL (will expire) and zero filters.
     (RecommendationAgentWithMCP as any).sessionMemory?.reset?.(sessionId);
     return res.json({ success: true });
   } catch (e) {

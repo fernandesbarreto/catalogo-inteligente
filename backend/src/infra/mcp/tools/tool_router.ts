@@ -97,8 +97,6 @@ NÃO use markdown. Apenas o JSON puro.`;
     // Limpar resposta do GPT que pode vir com markdown
     let cleanContent = content;
 
-    console.log("[intelligentToolRouter] Raw OpenAI response:", content);
-
     // Remover ```json e ``` se presentes
     if (cleanContent.startsWith("```json")) {
       cleanContent = cleanContent.replace(/^```json\s*/, "");
@@ -113,17 +111,14 @@ NÃO use markdown. Apenas o JSON puro.`;
     // Remover quebras de linha e espaços extras
     cleanContent = cleanContent.trim();
 
-    console.log("[intelligentToolRouter] Cleaned content:", cleanContent);
-
     let actions: any;
     try {
       actions = JSON.parse(cleanContent);
-      console.log("[intelligentToolRouter] Parsed actions:", actions);
     } catch (parseError) {
       console.error("[intelligentToolRouter] JSON parse error:", parseError);
       console.error("[intelligentToolRouter] Failed content:", cleanContent);
       throw new Error(
-        `Invalid JSON response from OpenAI: ${(parseError as Error).message}`
+        `Resposta JSON inválida do OpenAI: ${(parseError as Error).message}`
       );
     }
 
@@ -176,30 +171,46 @@ NÃO use markdown. Apenas o JSON puro.`;
           hex = colorToHexMap[input.keywords.color];
         }
 
-        // Mapear ambiente das keywords para sceneId
-        const sceneId = input.keywords?.environment 
-          ? `${input.keywords.environment}/01` 
-          : "sala/01"; // default é sala
-        
-        console.error(`[intelligentToolRouter] 🏠 Ambiente extraído: ${input.keywords?.environment || 'sala (default)'}`);
-        console.error(`[intelligentToolRouter] 🎬 SceneId final: ${sceneId}`);
-        
+        const environmentMapping: Record<string, string> = {
+          "área externa": "varanda",
+          exterior: "varanda",
+          fachada: "varanda",
+          externa: "varanda",
+          escritorio: "sala",
+          corredor: "sala",
+        };
+
+        let environment = input.keywords?.environment || "sala";
+        if (environmentMapping[environment]) {
+          environment = environmentMapping[environment];
+        }
+
+        const sceneId = `${environment}/01`;
+
         baseAction.args = {
           sceneId,
           ...(hex ? { hex } : {}),
           size: IMAGE_SIZE_DEFAULT,
         };
       } else if (action.tool === "Procurar tinta no Prisma por filtro") {
+        // Extract filters from keywords and user message
+        const extractedFilters = extractFiltersFromInput(input);
+
         baseAction.args = {
           query: user,
-          filters: {},
+          filters: extractedFilters,
           ...(input.limit ? { limit: input.limit } : {}),
           ...(input.offset ? { offset: input.offset } : {}),
         };
+
+        baseAction.args.fallbackToSemantic = true;
       } else if (action.tool === "Busca semântica de tinta nos embeddings") {
+        // Extract filters from keywords and user message
+        const extractedFilters = extractFiltersFromInput(input);
+
         baseAction.args = {
           query: user,
-          filters: {},
+          filters: extractedFilters,
           top_k: Math.min(input.limit || 8, 20) || 8,
           ...(input.offset ? { offset: input.offset } : {}),
         };
@@ -221,6 +232,45 @@ NÃO use markdown. Apenas o JSON puro.`;
     // Fallback para lógica antiga em caso de erro
     return toolRouterFallback(input);
   }
+}
+
+function extractFiltersFromInput(input: ToolRouterInput): Record<string, any> {
+  const filters: Record<string, any> = {};
+
+  // Extract room type from keywords
+  if (input.keywords?.environment) {
+    const environmentToRoomTypeMap: Record<string, string> = {
+      varanda: "área externa",
+      "área externa": "área externa",
+      exterior: "área externa",
+      fachada: "área externa",
+      externa: "área externa",
+      sala: "sala",
+      quarto: "quarto",
+      cozinha: "cozinha",
+      banheiro: "banheiro",
+      escritorio: "escritório",
+      corredor: "sala",
+    };
+
+    const roomType = environmentToRoomTypeMap[input.keywords.environment];
+    if (roomType) {
+      filters.roomType = roomType;
+    }
+  }
+
+  // Extract color from keywords
+  if (input.keywords?.color) {
+    filters.color = input.keywords.color;
+  }
+
+  // If no filters from keywords, try to extract from user message
+  if (Object.keys(filters).length === 0) {
+    const userFilters = detectStructuredFilters(input.userMessage || "");
+    Object.assign(filters, userFilters.filters);
+  }
+
+  return filters;
 }
 
 function sanitizeString(value: string | undefined): string | undefined {
@@ -319,7 +369,7 @@ function detectStructuredFilters(text: string) {
       filters.roomType = "banheiro";
     else if (/(escrit[óo]rio|home office)/i.test(q))
       filters.roomType = "escritório";
-    else if (/(exterior|externa|fachada|área externa)/i.test(q))
+    else if (/(exterior|externa|fachada|área externa|varanda)/i.test(q))
       filters.roomType = "área externa";
   }
 
@@ -521,18 +571,31 @@ async function toolRouterFallback(
       rationale:
         "Pedido com filtros/atributos estruturados para retornar produtos do catálogo.",
     });
+
+    // Add fallback flag to indicate that semantic search should be used if filter search returns 0 results
+    args.fallbackToSemantic = true;
   }
 
   // Route: Image generation when preview/visualization requested or scene/hex provided
   if (wantsImageGeneration(combined) || normalizedHex || maybeSceneId) {
-    // Mapear ambiente das keywords para sceneId no fallback também
-    const sceneId = input.keywords?.environment 
-      ? `${input.keywords.environment}/01` 
+    const environmentMapping: Record<string, string> = {
+      "área externa": "varanda",
+      exterior: "varanda",
+      fachada: "varanda",
+      externa: "varanda",
+      escritorio: "sala",
+      corredor: "sala",
+    };
+
+    let environment = input.keywords?.environment;
+    if (environment && environmentMapping[environment]) {
+      environment = environmentMapping[environment];
+    }
+
+    const sceneId = environment
+      ? `${environment}/01`
       : maybeSceneId || "sala/01"; // default é sala
-    
-    console.error(`[toolRouterFallback] 🏠 Fallback: Ambiente extraído: ${input.keywords?.environment || 'sala (default)'}`);
-    console.error(`[toolRouterFallback] 🎬 Fallback: SceneId final: ${sceneId}`);
-    
+
     const args: Record<string, any> = {
       sceneId,
       ...(normalizedHex ? { hex: normalizedHex } : {}),

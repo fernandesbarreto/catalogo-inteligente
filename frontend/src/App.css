@@ -802,7 +802,9 @@ body {
   margin-top: 0.75rem;
 }
 .palette-preview img {
-  max-width: 100%;
+  width: 360px;
+  height: 360px;
+  object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
@@ -810,6 +812,13 @@ body {
 @media (max-width: 768px) {
   .palette-row {
     grid-template-columns: 1fr;
+  }
+
+  .palette-preview img {
+    width: 100%;
+    height: auto;
+    max-width: 360px;
+    max-height: 360px;
   }
 }
 

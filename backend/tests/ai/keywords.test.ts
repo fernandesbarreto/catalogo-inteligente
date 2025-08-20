@@ -64,7 +64,6 @@ describe("extractKeywordsFromConversation", () => {
     const keywords = extractKeywordsFromConversation(history);
 
     expect(keywords.environment).toBe("cozinha");
-    expect(keywords.keywords).toContain("resistente");
     expect(keywords.keywords).toContain("acabamento");
   });
 

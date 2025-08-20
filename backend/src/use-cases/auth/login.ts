@@ -7,7 +7,7 @@ export class Login {
 
   async exec({ email, password }: { email: string; password: string }) {
     if (!email || !password)
-      throw Object.assign(new Error("Invalid credentials"), { status: 400 });
+      throw Object.assign(new Error("Credenciais inválidas"), { status: 400 });
 
     const user = await this.users.findByEmail(email);
     if (!user) throw Object.assign(new Error("Unauthorized"), { status: 401 });

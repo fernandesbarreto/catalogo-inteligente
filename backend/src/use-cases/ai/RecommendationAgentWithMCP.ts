@@ -40,7 +40,7 @@ export class RecommendationAgentWithMCP {
   }
 
   async initialize() {
-    // Tentar habilitar MCP se disponível
+    // Try to enable MCP if available
     try {
       await this.mcpAdapter.enable();
     } catch (error) {}
@@ -52,12 +52,12 @@ export class RecommendationAgentWithMCP {
   async recommend(
     request: RecommendationRequest
   ): Promise<RecommendationPick[]> {
-    // Garantir MCP habilitado se solicitado
+    // Ensure MCP is enabled if requested
     if (request.useMCP && !this.mcpAdapter.isMCPEnabled()) {
       await this.initialize();
     }
 
-    // Detecção simples de intenção → gerar filtros a partir da query + histórico + memória de sessão
+    // Simple intent detection → generate filters from query + history + session memory
     const inferredFromQuery = this.inferFiltersFromQuery(request.query);
     const inferredFromHistory = this.inferFiltersFromHistory(
       request.history || []
@@ -76,21 +76,39 @@ export class RecommendationAgentWithMCP {
       );
       memoryFilters = snap?.filters;
     }
+    // Extract keywords from conversation for environment detection
+    let environmentKeywords: any = {};
+    if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
+      const snap = await RecommendationAgentWithMCP.sessionMemory.get(
+        request.sessionId
+      );
+      if (snap?.keywords?.environment) {
+        // Map environment keywords to room type filters
+        environmentKeywords = this.mapEnvironmentToRoomType(
+          snap.keywords.environment
+        );
+      }
+    }
+
     const inferredFilters = {
       ...(memoryFilters || {}),
+      ...environmentKeywords,
       ...inferredFromHistory,
       ...inferredFromQuery,
     };
+    // Apply room type mapping for database queries
+    const mappedFilters = this.mapFiltersForDatabase(inferredFilters);
+
     const effectiveContext = {
       ...(request.context || {}),
       filters: {
         ...(request.context?.filters || {}),
-        ...inferredFilters,
+        ...mappedFilters,
       },
     };
 
-    // Determinar query efetiva em follow-ups: se o usuário pedir “mais opções”,
-    // usamos a última query persistida; se não houver, caímos para a query atual.
+    // Determine effective query in follow-ups: if user asks for "more options",
+    // we use the last persisted query; if not available, fall back to current query
     let effectiveQuery = request.query;
     if (this.isFollowUpQuery(request.query)) {
       if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
@@ -100,7 +118,7 @@ export class RecommendationAgentWithMCP {
         if (snap?.lastQuery) {
           effectiveQuery = snap.lastQuery;
         } else {
-          // Sem lastQuery na memória, tenta extrair a última pergunta não-follow-up do histórico
+          // Without lastQuery in memory, try to extract the last non-follow-up question from history
           const fromHistory = this.findLastNonFollowUpUserQuery(
             request.history || []
           );
@@ -109,12 +127,22 @@ export class RecommendationAgentWithMCP {
       }
     }
 
-    // Se MCP está habilitado e foi solicitado, orquestrar tools e aplicar RRF
+    // If MCP is enabled and requested, orchestrate tools and apply RRF
     if (request.useMCP && this.mcpAdapter.isMCPEnabled()) {
-      // Estratégia: usar routerActions quando disponíveis; caso contrário, chamar ambas as tools com paginação leve (offset baseado na sessão)
+      // Strategy: use routerActions when available; otherwise, call both tools with light pagination (offset based on session)
       let offset = 0;
       if (request.sessionId) {
-        offset = parseInt(request.sessionId.slice(-2), 16) % 20;
+        // Check if this is a fresh session (no existing session memory)
+        const snap = await RecommendationAgentWithMCP.sessionMemory?.get(
+          request.sessionId
+        );
+        if (snap) {
+          // Use stored offset for existing sessions
+          offset = snap.nextOffset || 0;
+        } else {
+          // Fresh session - start with offset 0
+          offset = 0;
+        }
       }
 
       let filterRes: any = null;
@@ -135,9 +163,21 @@ export class RecommendationAgentWithMCP {
             context: { ...effectiveContext, offset },
             tools: ["filter_search"],
           });
+
+          const filterPicks = filterRes?.picks ?? [];
+          if (filterPicks.length === 0) {
+            console.log(
+              "[RecommendationAgent] Filter search returned 0 results, falling back to semantic search"
+            );
+            semanticRes = await this.mcpAdapter.processRecommendation({
+              query: effectiveQuery,
+              context: { ...effectiveContext, offset },
+              tools: ["semantic_search"],
+            });
+          }
         }
 
-        if (wantsSemantic) {
+        if (wantsSemantic && !semanticRes) {
           semanticRes = await this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
             context: { ...effectiveContext, offset },
@@ -145,27 +185,37 @@ export class RecommendationAgentWithMCP {
           });
         }
       } else {
-        // Fallback: call both tools
-        const [filterResTemp, semanticResTemp] = await Promise.all([
-          this.mcpAdapter.processRecommendation({
-            query: effectiveQuery,
-            context: { ...effectiveContext, offset },
-            tools: ["filter_search"],
-          }),
-          this.mcpAdapter.processRecommendation({
+        // Fallback: call filter search first, then semantic search if needed
+        filterRes = await this.mcpAdapter.processRecommendation({
+          query: effectiveQuery,
+          context: { ...effectiveContext, offset },
+          tools: ["filter_search"],
+        });
+
+        const filterPicks = filterRes?.picks ?? [];
+        if (filterPicks.length === 0) {
+          console.log(
+            "[RecommendationAgent] Filter search returned 0 results, falling back to semantic search"
+          );
+          semanticRes = await this.mcpAdapter.processRecommendation({
             query: effectiveQuery,
             context: { ...effectiveContext, offset },
             tools: ["semantic_search"],
-          }),
-        ]);
-        filterRes = filterResTemp;
-        semanticRes = semanticResTemp;
+          });
+        } else {
+          // If filter search returned results, also try semantic search for better coverage
+          semanticRes = await this.mcpAdapter.processRecommendation({
+            query: effectiveQuery,
+            context: { ...effectiveContext, offset },
+            tools: ["semantic_search"],
+          });
+        }
       }
 
       const filterPicks = filterRes?.picks ?? [];
       const semanticPicks = semanticRes?.picks ?? [];
 
-      // Evitar repetição: filtrar IDs já vistos na sessão
+      // Avoid repetition: filter IDs already seen in session
       let combined = this.combineWithRRF(filterPicks, semanticPicks);
       if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
         const snap = await RecommendationAgentWithMCP.sessionMemory.get(
@@ -177,14 +227,70 @@ export class RecommendationAgentWithMCP {
       combined = combined.slice(0, 10);
 
       if (combined.length > 0) {
-        // Atualizar memória de sessão com filtros efetivos e palavras-chave
+        // Update session memory with effective filters and keywords
         if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
-          // Extrair palavras-chave da conversa
+          // Extract keywords from conversation
           const keywords = extractKeywordsFromConversation(
             request.history || []
           );
 
-          // Atualizar memória: offset, lastQuery, palavras-chave e adicionar IDs vistos
+          // Check if environment has changed significantly
+          const currentSnapshot =
+            await RecommendationAgentWithMCP.sessionMemory.get(
+              request.sessionId
+            );
+          const environmentChanged =
+            currentSnapshot?.keywords?.environment !== keywords.environment &&
+            currentSnapshot?.keywords?.environment !== undefined; // Don't reset if previous was undefined
+
+          // If environment changed, reset all context except current query variables
+          if (environmentChanged && keywords.environment) {
+            console.log(
+              `[RecommendationAgent] Environment changed from ${currentSnapshot?.keywords?.environment} to ${keywords.environment}, resetting context`
+            );
+
+            // Reset all context variables except those from the current query
+            const currentQueryFilters = this.inferFiltersFromQuery(
+              request.query
+            );
+            const currentQueryKeywords = this.extractKeywordsFromCurrentQuery(
+              request.query
+            );
+
+            // Keep only current query variables, reset everything else
+            const resetKeywords = {
+              environment: keywords.environment, // Keep new environment
+              ...currentQueryKeywords, // Keep any keywords from current query
+            };
+
+            // Reset filters to only include current query filters
+            effectiveContext.filters = {
+              ...currentQueryFilters,
+              // Map environment to room type if present
+              ...(keywords.environment
+                ? this.mapEnvironmentToRoomType(keywords.environment)
+                : {}),
+            };
+
+            // Reset session memory
+            await RecommendationAgentWithMCP.sessionMemory.set(
+              request.sessionId,
+              {
+                filters: effectiveContext.filters,
+                keywords: resetKeywords,
+                lastQuery: effectiveQuery,
+                lastPicks: combined.map((p) => ({
+                  id: p.id,
+                  reason: p.reason,
+                })),
+                nextOffset: 0, // Reset offset for new environment
+                seenIds: [], // Reset seen IDs for new environment
+                lastUpdatedAt: Date.now(),
+              }
+            );
+          }
+
+          // Update memory: offset, lastQuery, keywords and add seen IDs
           await RecommendationAgentWithMCP.sessionMemory.set(
             request.sessionId,
             {
@@ -211,7 +317,7 @@ export class RecommendationAgentWithMCP {
       }
     }
 
-    // Fallback: nenhum resultado
+    // Fallback: no results
     return [];
   }
 
@@ -227,6 +333,36 @@ export class RecommendationAgentWithMCP {
   }
 
   // ====== Helpers ======
+  private mapEnvironmentToRoomType(environment: string): any {
+    const environmentToRoomTypeMap: Record<string, string> = {
+      varanda: "área externa",
+      "área externa": "área externa",
+      exterior: "área externa",
+      fachada: "área externa",
+      externa: "área externa",
+      sala: "sala",
+      quarto: "quarto",
+      cozinha: "cozinha",
+      banheiro: "banheiro",
+      escritorio: "escritório",
+      corredor: "sala", // Default corridors to sala for search
+    };
+
+    const roomType = environmentToRoomTypeMap[environment];
+    return roomType ? { roomType } : {};
+  }
+
+  private mapFiltersForDatabase(filters: any): any {
+    const mapped = { ...filters };
+
+    // Map environment/room type keywords to database values
+    if (mapped.roomType === "varanda") {
+      mapped.roomType = "área externa";
+    }
+
+    return mapped;
+  }
+
   private inferFiltersFromQuery(query: string): {
     surfaceType?: string;
     roomType?: string;
@@ -244,7 +380,7 @@ export class RecommendationAgentWithMCP {
     else if (/(sala|estar|living)/.test(q)) filters.roomType = "sala";
     else if (/(escrit[óo]rio|home office)/.test(q))
       filters.roomType = "escritório";
-    else if (/(exterior|externa|fachada|área externa)/.test(q))
+    else if (/(exterior|externa|fachada|área externa|varanda)/.test(q))
       filters.roomType = "área externa";
 
     // surfaceType
@@ -264,12 +400,12 @@ export class RecommendationAgentWithMCP {
     else if (/(brilhante|brilho)/.test(q)) filters.finish = "brilhante";
     else if (/(acetinado)/.test(q)) filters.finish = "acetinado";
 
-    // line (opcional, pouca influência)
+    // line (optional, low influence)
     if (/(superlav[áa]vel)/.test(q)) filters.line = "Superlavável";
     else if (/(toque de seda)/.test(q)) filters.line = "Toque de Seda";
     else if (/(fosco completo)/.test(q)) filters.line = "Fosco Completo";
 
-    // color intents (padrões simples)
+    // color intents (simple patterns)
     if (/(branco|branca|white)/.test(q)) filters.color = "branco";
     else if (/(preto|preta|black)/.test(q)) filters.color = "preto";
     else if (/(cinza|cinzento|gray|grey)/.test(q)) filters.color = "cinza";
@@ -289,7 +425,7 @@ export class RecommendationAgentWithMCP {
     for (const msg of history) {
       if (msg.role !== "user") continue;
       const f = this.inferFiltersFromQuery(msg.content);
-      // Preferir menções mais recentes (sobrescreve)
+      // Prefer more recent mentions (overwrites)
       Object.assign(filters, f);
     }
     return filters as {
@@ -392,5 +528,112 @@ export class RecommendationAgentWithMCP {
     const combinedArray = Array.from(combinedMap.values());
     combinedArray.sort((a, b) => (b.rrfScore || 0) - (a.rrfScore || 0));
     return combinedArray;
+  }
+
+  private extractKeywordsFromCurrentQuery(query: string): {
+    color?: string;
+    style?: string;
+    mood?: string;
+    keywords?: string[];
+  } {
+    const q = query.toLowerCase();
+    const keywords: any = {};
+
+    // Extract color from current query
+    const colorPatterns = {
+      branco: /\b(branco|branca|white)\b/,
+      preto: /\b(preto|preta|black)\b/,
+      azul: /\b(azul|blue)\b/,
+      vermelho: /\b(vermelho|vermelha|red)\b/,
+      verde: /\b(verde|green)\b/,
+      amarelo: /\b(amarelo|amarela|yellow)\b/,
+      rosa: /\b(rosa|pink)\b/,
+      marrom: /\b(marrom|brown)\b/,
+      laranja: /\b(laranja|orange)\b/,
+      bege: /\b(bege|beige)\b/,
+      roxo: /\b(roxo|purple|violeta|violet)\b/,
+      cinza: /\b(cinza|gray|grey)\b/,
+      turquesa: /\b(turquesa|turquoise)\b/,
+      coral: /\b(coral|salmão|salmon)\b/,
+      dourado: /\b(dourado|gold)\b/,
+      prateado: /\b(prateado|silver)\b/,
+      vinho: /\b(vinho|wine|burgundy)\b/,
+      jade: /\b(jade)\b/,
+      aqua: /\b(aqua)\b/,
+      ciano: /\b(ciano|teal)\b/,
+    };
+
+    for (const [color, pattern] of Object.entries(colorPatterns)) {
+      if (pattern.test(q)) {
+        keywords.color = color;
+        break;
+      }
+    }
+
+    // Extract style from current query
+    const stylePatterns = {
+      moderno: /\b(moderno|moderna|contemporâneo|contemporânea)\b/,
+      classico: /\b(clássico|clássica|tradicional)\b/,
+      minimalista: /\b(minimalista|minimalismo)\b/,
+      rustico: /\b(rústico|rústica|country)\b/,
+      industrial: /\b(industrial|industrializado)\b/,
+      escandinavo: /\b(escandinavo|escandinava|nórdico|nórdica)\b/,
+      bohemio: /\b(boêmio|boêmia|bohemian)\b/,
+      vintage: /\b(vintage|retrô|retro)\b/,
+      luxuoso: /\b(luxuoso|luxuosa|luxury)\b/,
+      clean: /\b(clean|limpo|limpa)\b/,
+    };
+
+    for (const [style, pattern] of Object.entries(stylePatterns)) {
+      if (pattern.test(q)) {
+        keywords.style = style;
+        break;
+      }
+    }
+
+    // Extract mood from current query
+    const moodPatterns = {
+      tranquilo: /\b(tranquilo|tranquila|calmo|calma|sereno|serena)\b/,
+      energetico: /\b(energético|energética|vibrante|dinâmico|dinâmica)\b/,
+      acolhedor: /\b(acolhedor|acolhedora|aconchegante|warm)\b/,
+      elegante: /\b(elegante|sofisticado|sofisticada)\b/,
+      romantico: /\b(romântico|romântica|romance)\b/,
+      profissional: /\b(profissional|corporativo|corporativa)\b/,
+      divertido: /\b(divertido|divertida|alegre|colorido|colorida)\b/,
+      neutro: /\b(neutro|neutra|neutro)\b/,
+    };
+
+    for (const [mood, pattern] of Object.entries(moodPatterns)) {
+      if (pattern.test(q)) {
+        keywords.mood = mood;
+        break;
+      }
+    }
+
+    // Extract additional keywords from current query
+    const additionalKeywords = [];
+    const keywordPatterns = [
+      /\b(iluminação|luz|clara|escura)\b/,
+      /\b(textura|texturizado|liso|rugoso)\b/,
+      /\b(acabamento|fosco|acetinado|brilhante|semibrilho)\b/,
+      /\b(linha|premium|standard|econômica)\b/,
+      /\b(durabilidade|resistente|lavável|lavavel)\b/,
+      /\b(eco|sustentável|natural)\b/,
+      /\b(antialérgico|antibacteriano)\b/,
+      /\b(clean|limpo|limpa)\b/,
+    ];
+
+    for (const pattern of keywordPatterns) {
+      const match = q.match(pattern);
+      if (match) {
+        additionalKeywords.push(match[0]);
+      }
+    }
+
+    if (additionalKeywords.length > 0) {
+      keywords.keywords = [...new Set(additionalKeywords)];
+    }
+
+    return keywords;
   }
 }

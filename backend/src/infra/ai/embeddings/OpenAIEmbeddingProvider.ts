@@ -30,7 +30,7 @@ export class OpenAIEmbeddingProvider implements IEmbeddingProvider {
       return response.data[0].embedding;
     } catch (error) {
       console.error("Error generating embedding:", error);
-      throw new Error("Failed to generate embedding for paint");
+      throw new Error("Falha ao gerar embedding para a tinta");
     }
   }
 }
