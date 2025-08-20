@@ -97,14 +97,13 @@ export class AiController {
       let toolRes: any;
       try {
         if (imageOnly) {
-          // Extract color from user message
-          const hex = this.extractColorFromMessage(
-            userMessage + history.map((h) => h.content).join(" ")
-          );
+          // Extrair cor da mensagem do usuário
+          const hex = this.extractColorFromMessage(userMessage, history);
 
           // Extract environment from message
           const environment = this.extractEnvironmentFromMessage(
-            userMessage + history.map((h) => h.content).join(" ")
+            userMessage,
+            history
           );
           const sceneId = `${environment}/01`;
 
@@ -366,7 +365,10 @@ export class AiController {
     return colorMap[normalizedColor] || "#5FA3D1"; // fallback para azul médio
   }
 
-  private extractColorFromMessage(message: string): string {
+  private extractColorFromMessage(
+    userMessage: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>
+  ): string {
     const colorKeywords = [
       "branco",
       "branca",
@@ -429,17 +431,31 @@ export class AiController {
       "sky",
     ];
 
-    const messageLower = message.toLowerCase();
+    // First, try to find color in the current user message
+    const userMessageLower = userMessage.toLowerCase();
     for (const color of colorKeywords) {
-      if (messageLower.includes(color)) {
+      if (userMessageLower.includes(color)) {
         return this.mapColorToHex(color);
+      }
+    }
+
+    // If no color found in user message, search in history
+    for (const message of history) {
+      const messageLower = message.content.toLowerCase();
+      for (const color of colorKeywords) {
+        if (messageLower.includes(color)) {
+          return this.mapColorToHex(color);
+        }
       }
     }
 
     return "#5FA3D1"; // fallback para azul médio
   }
 
-  private extractEnvironmentFromMessage(message: string): string {
+  private extractEnvironmentFromMessage(
+    userMessage: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>
+  ): string {
     const environmentPatterns = {
       sala: /\b(sala|living|estar)\b/,
       quarto: /\b(quarto|bedroom|dormitório)\b/,
@@ -450,10 +466,21 @@ export class AiController {
       corredor: /\b(corredor|hall|passagem)\b/,
     };
 
-    const lowerMessage = message.toLowerCase();
+    // First, try to find environment in the current user message
+    const lowerUserMessage = userMessage.toLowerCase();
     for (const [env, pattern] of Object.entries(environmentPatterns)) {
-      if (pattern.test(lowerMessage)) {
+      if (pattern.test(lowerUserMessage)) {
         return env;
+      }
+    }
+
+    // If no environment found in user message, search in history
+    for (const message of history) {
+      const lowerMessage = message.content.toLowerCase();
+      for (const [env, pattern] of Object.entries(environmentPatterns)) {
+        if (pattern.test(lowerMessage)) {
+          return env;
+        }
       }
     }
 

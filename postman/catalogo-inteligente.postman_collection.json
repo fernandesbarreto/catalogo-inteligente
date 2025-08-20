@@ -21,7 +21,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"email\": \"admin@example.com\", \"password\": \"secret123\"}"
+              "raw": "{\"email\": \"admin@example.com\", \"password\": \"admin123\"}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",

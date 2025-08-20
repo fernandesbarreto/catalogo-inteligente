@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Message } from "../types";
+import { parseMarkdown } from "../utils/markdown";
 
 interface ChatProps {
   messages: Message[];
@@ -50,7 +51,11 @@ export const Chat: React.FC<ChatProps> = ({
                   <div className="bot-message">
                     <div className="bot-avatar">🤖</div>
                     <div className="message-text">
-                      {message.content}
+                      <div 
+                        dangerouslySetInnerHTML={{ 
+                          __html: parseMarkdown(message.content) 
+                        }} 
+                      />
                       {message.imageBase64 && (
                         <div
                           className="palette-preview"
@@ -68,7 +73,13 @@ export const Chat: React.FC<ChatProps> = ({
                   </div>
                 ) : (
                   <div className="user-message">
-                    <div className="message-text">{message.content}</div>
+                    <div className="message-text">
+                      <div 
+                        dangerouslySetInnerHTML={{ 
+                          __html: parseMarkdown(message.content) 
+                        }} 
+                      />
+                    </div>
                     <div className="user-avatar">👤</div>
                   </div>
                 )}
