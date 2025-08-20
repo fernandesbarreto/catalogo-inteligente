@@ -21,11 +21,11 @@ export class AiController {
   }
 
   private async analyzeIntent(userMessage: string, history: any[]) {
-    const summary = history
-      .slice(-8)
-      .map((m) => `${m.role}: ${m.content}`)
-      .join(" \n ")
-      .slice(0, 600);
+    // Extrair palavras-chave da conversa em vez de toda a conversa
+    const { extractKeywordsFromConversation } = await import(
+      "../../../../infra/session/SessionMemory"
+    );
+    const keywords = extractKeywordsFromConversation(history);
 
     const mcp = new MCPClient(
       process.env.MCP_COMMAND || "npm",
@@ -37,7 +37,7 @@ export class AiController {
     await mcp.connect();
     const result = await mcp.callTool({
       name: "tool_router",
-      arguments: { userMessage, conversationSummary: summary },
+      arguments: { userMessage, keywords },
     });
     mcp.disconnect();
 
@@ -98,14 +98,22 @@ export class AiController {
       try {
         if (imageOnly) {
           // Extrair cor da mensagem do usuário
-          const hex = this.extractColorFromMessage(userMessage);
+          const hex = this.extractColorFromMessage(
+            userMessage + history.map((h) => h.content).join(" ")
+          );
+
+          // Extrair ambiente da mensagem
+          const environment = this.extractEnvironmentFromMessage(
+            userMessage + history.map((h) => h.content).join(" ")
+          );
+          const sceneId = `${environment}/01`;
 
           // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
           toolRes = await Promise.race([
             mcp.callTool({
               name: "generate_palette_image",
               arguments: {
-                sceneId: "varanda/moderna-01",
+                sceneId,
                 hex: hex,
                 size: "1024x1024",
               },
@@ -151,7 +159,7 @@ export class AiController {
       response.message = (payload?.reply || response.message || "").trim();
       if (!response.message) {
         response.message =
-          "Pronto! Gerei a prévia com a parede pintada. Quer ajustar cena, acabamento ou tom?";
+          "Pronto! Gerei a prévia com a parede pintada. Precisa de tinta para mais alguma coisa?";
       }
 
       if (imageBase64) {
@@ -232,12 +240,11 @@ export class AiController {
           .json({ actions: [], rationale: "userMessage obrigatório" });
       }
 
-      // Build a concise conversation summary from last messages
-      const last = history.slice(-8);
-      const summary = last
-        .map((m) => `${m.role}: ${m.content}`)
-        .join(" \n ")
-        .slice(0, 600);
+      // Extrair palavras-chave da conversa em vez de toda a conversa
+      const { extractKeywordsFromConversation } = await import(
+        "../../../../infra/session/SessionMemory"
+      );
+      const keywords = extractKeywordsFromConversation(history);
 
       const mcp = new MCPClient(
         process.env.MCP_COMMAND || "npm",
@@ -250,7 +257,7 @@ export class AiController {
         name: "tool_router",
         arguments: {
           userMessage,
-          conversationSummary: summary,
+          keywords,
           limit: req.body?.limit,
           offset: req.body?.offset,
         },
@@ -430,6 +437,27 @@ export class AiController {
     }
 
     return "#5FA3D1"; // fallback para azul médio
+  }
+
+  private extractEnvironmentFromMessage(message: string): string {
+    const environmentPatterns = {
+      sala: /\b(sala|living|estar)\b/,
+      quarto: /\b(quarto|bedroom|dormitório)\b/,
+      cozinha: /\b(cozinha|kitchen)\b/,
+      banheiro: /\b(banheiro|bathroom|wc)\b/,
+      varanda: /\b(varanda|balcony|sacada)\b/,
+      escritorio: /\b(escritório|office|estudo)\b/,
+      corredor: /\b(corredor|hall|passagem)\b/,
+    };
+
+    const lowerMessage = message.toLowerCase();
+    for (const [env, pattern] of Object.entries(environmentPatterns)) {
+      if (pattern.test(lowerMessage)) {
+        return env;
+      }
+    }
+
+    return "sala"; // default
   }
 
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {

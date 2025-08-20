@@ -70,7 +70,27 @@ function simpleHeuristicIntent(message: string) {
     ) ||
     /\b(como|como ficaria|como se parece).*\b(imagem|foto|prévia)\b/.test(q);
   const hex = extractHex(message) || "#5FA3D1";
-  const sceneId = "varanda/moderna-01";
+
+  // Extrair ambiente da mensagem
+  const environmentPatterns = {
+    sala: /\b(sala|living|estar)\b/,
+    quarto: /\b(quarto|bedroom|dormitório)\b/,
+    cozinha: /\b(cozinha|kitchen)\b/,
+    banheiro: /\b(banheiro|bathroom|wc)\b/,
+    varanda: /\b(varanda|balcony|sacada)\b/,
+    escritorio: /\b(escritório|office|estudo)\b/,
+    corredor: /\b(corredor|hall|passagem)\b/,
+  };
+
+  let environment = "sala"; // default
+  for (const [env, pattern] of Object.entries(environmentPatterns)) {
+    if (pattern.test(q)) {
+      environment = env;
+      break;
+    }
+  }
+
+  const sceneId = `${environment}/01`;
   const finishMatch = q.match(
     /\b(fosco|acetinado|semibrilho|semi-brilho|brilhante)\b/
   );

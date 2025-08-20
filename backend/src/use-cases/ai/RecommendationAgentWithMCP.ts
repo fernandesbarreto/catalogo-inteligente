@@ -3,6 +3,7 @@ import { MCPAdapter } from "../../infra/mcp/MCPAdapter";
 import {
   ISessionMemory,
   createSessionMemory,
+  extractKeywordsFromConversation,
 } from "../../infra/session/SessionMemory";
 
 export interface RecommendationRequest {
@@ -176,13 +177,19 @@ export class RecommendationAgentWithMCP {
       combined = combined.slice(0, 10);
 
       if (combined.length > 0) {
-        // Atualizar memória de sessão com filtros efetivos
+        // Atualizar memória de sessão com filtros efetivos e palavras-chave
         if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
-          // Atualizar memória: offset, lastQuery e adicionar IDs vistos
+          // Extrair palavras-chave da conversa
+          const keywords = extractKeywordsFromConversation(
+            request.history || []
+          );
+
+          // Atualizar memória: offset, lastQuery, palavras-chave e adicionar IDs vistos
           await RecommendationAgentWithMCP.sessionMemory.set(
             request.sessionId,
             {
               filters: effectiveContext.filters,
+              keywords,
               lastQuery: effectiveQuery,
               lastPicks: combined.map((p) => ({ id: p.id, reason: p.reason })),
               nextOffset: offset + 10,
