@@ -155,10 +155,17 @@ export async function createSessionMemory(): Promise<ISessionMemory> {
 
 /**
  * Extrai palavras-chave da conversa em vez de salvar toda a conversa
+ * Prioriza mensagens mais recentes do usuário
  */
 export function extractKeywordsFromConversation(
   history: Array<{ role: "user" | "assistant"; content: string }>
 ): ConversationKeywords {
+  const recentUserMessages = history
+    .filter((m) => m.role === "user")
+    .slice(-3)
+    .reverse()
+    .map((m) => m.content.toLowerCase());
+
   const combinedText = history
     .map((m) => m.content)
     .join(" ")
@@ -166,21 +173,37 @@ export function extractKeywordsFromConversation(
 
   const keywords: ConversationKeywords = {};
 
-  // Extrair tipo de ambiente
-  const environmentPatterns = {
-    sala: /\b(sala|living|estar)\b/,
-    quarto: /\b(quarto|bedroom|dormitório)\b/,
-    cozinha: /\b(cozinha|kitchen)\b/,
-    banheiro: /\b(banheiro|bathroom|wc)\b/,
-    varanda: /\b(varanda|balcony|sacada)\b/,
-    escritorio: /\b(escritório|office|estudo)\b/,
-    corredor: /\b(corredor|hall|passagem)\b/,
-  };
+  const environmentPatterns = [
+    {
+      env: "área externa",
+      pattern: /\b(área externa|exterior|fachada|externa)\b/,
+    },
+    { env: "escritorio", pattern: /\b(escritório|office|estudo)\b/ },
+    { env: "banheiro", pattern: /\b(banheiro|bathroom|wc)\b/ },
+    { env: "cozinha", pattern: /\b(cozinha|kitchen)\b/ },
+    { env: "varanda", pattern: /\b(varanda|balcony|sacada)\b/ },
+    { env: "corredor", pattern: /\b(corredor|hall|passagem)\b/ },
+    { env: "quarto", pattern: /\b(quarto|bedroom|dormitório)\b/ },
+    { env: "sala", pattern: /\b(sala|living|estar)\b/ },
+  ];
 
-  for (const [env, pattern] of Object.entries(environmentPatterns)) {
-    if (pattern.test(combinedText)) {
-      keywords.environment = env;
-      break;
+  for (const message of recentUserMessages) {
+    for (const { env, pattern } of environmentPatterns) {
+      if (pattern.test(message)) {
+        keywords.environment = env;
+        break;
+      }
+    }
+    if (keywords.environment) break; // Parar na primeira mensagem que encontrar
+  }
+
+  // Se não encontrou nas mensagens recentes, tentar na conversa completa
+  if (!keywords.environment) {
+    for (const { env, pattern } of environmentPatterns) {
+      if (pattern.test(combinedText)) {
+        keywords.environment = env;
+        break;
+      }
     }
   }
 
@@ -208,10 +231,24 @@ export function extractKeywordsFromConversation(
     ciano: /\b(ciano|teal)\b/,
   };
 
-  for (const [color, pattern] of Object.entries(colorPatterns)) {
-    if (pattern.test(combinedText)) {
-      keywords.color = color;
-      break;
+  // Tentar extrair cor das mensagens recentes primeiro (mais recente primeiro)
+  for (const message of recentUserMessages) {
+    for (const [color, pattern] of Object.entries(colorPatterns)) {
+      if (pattern.test(message)) {
+        keywords.color = color;
+        break;
+      }
+    }
+    if (keywords.color) break; // Parar na primeira mensagem que encontrar
+  }
+
+  // Se não encontrou nas mensagens recentes, tentar na conversa completa
+  if (!keywords.color) {
+    for (const [color, pattern] of Object.entries(colorPatterns)) {
+      if (pattern.test(combinedText)) {
+        keywords.color = color;
+        break;
+      }
     }
   }
 
@@ -229,10 +266,24 @@ export function extractKeywordsFromConversation(
     clean: /\b(clean|limpo|limpa)\b/,
   };
 
-  for (const [style, pattern] of Object.entries(stylePatterns)) {
-    if (pattern.test(combinedText)) {
-      keywords.style = style;
-      break;
+  // Tentar extrair estilo das mensagens recentes primeiro (mais recente primeiro)
+  for (const message of recentUserMessages) {
+    for (const [style, pattern] of Object.entries(stylePatterns)) {
+      if (pattern.test(message)) {
+        keywords.style = style;
+        break;
+      }
+    }
+    if (keywords.style) break; // Parar na primeira mensagem que encontrar
+  }
+
+  // Se não encontrou nas mensagens recentes, tentar na conversa completa
+  if (!keywords.style) {
+    for (const [style, pattern] of Object.entries(stylePatterns)) {
+      if (pattern.test(combinedText)) {
+        keywords.style = style;
+        break;
+      }
     }
   }
 
@@ -248,14 +299,28 @@ export function extractKeywordsFromConversation(
     neutro: /\b(neutro|neutra|neutro)\b/,
   };
 
-  for (const [mood, pattern] of Object.entries(moodPatterns)) {
-    if (pattern.test(combinedText)) {
-      keywords.mood = mood;
-      break;
+  // Tentar extrair clima das mensagens recentes primeiro (mais recente primeiro)
+  for (const message of recentUserMessages) {
+    for (const [mood, pattern] of Object.entries(moodPatterns)) {
+      if (pattern.test(message)) {
+        keywords.mood = mood;
+        break;
+      }
+    }
+    if (keywords.mood) break; // Parar na primeira mensagem que encontrar
+  }
+
+  // Se não encontrou nas mensagens recentes, tentar na conversa completa
+  if (!keywords.mood) {
+    for (const [mood, pattern] of Object.entries(moodPatterns)) {
+      if (pattern.test(combinedText)) {
+        keywords.mood = mood;
+        break;
+      }
     }
   }
 
-  // Extrair palavras-chave adicionais
+  // Extrair palavras-chave adicionais - priorizar mensagens recentes
   const additionalKeywords = [];
   const keywordPatterns = [
     /\b(iluminação|luz|clara|escura)\b/,
@@ -268,10 +333,24 @@ export function extractKeywordsFromConversation(
     /\b(clean|limpo|limpa)\b/,
   ];
 
-  for (const pattern of keywordPatterns) {
-    const match = combinedText.match(pattern);
-    if (match) {
-      additionalKeywords.push(match[0]);
+  // Tentar extrair das mensagens recentes primeiro (mais recente primeiro)
+  for (const message of recentUserMessages) {
+    for (const pattern of keywordPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        additionalKeywords.push(match[0]);
+      }
+    }
+    if (additionalKeywords.length > 0) break; // Parar na primeira mensagem que encontrar
+  }
+
+  // Se não encontrou nas mensagens recentes, tentar na conversa completa
+  if (additionalKeywords.length === 0) {
+    for (const pattern of keywordPatterns) {
+      const match = combinedText.match(pattern);
+      if (match) {
+        additionalKeywords.push(match[0]);
+      }
     }
   }
 

@@ -184,6 +184,21 @@ export class RecommendationAgentWithMCP {
             request.history || []
           );
 
+          // Check if environment has changed significantly
+          const currentSnapshot =
+            await RecommendationAgentWithMCP.sessionMemory.get(
+              request.sessionId
+            );
+          const environmentChanged =
+            currentSnapshot?.keywords?.environment !== keywords.environment;
+
+          // If environment changed, prioritize the new environment
+          if (environmentChanged && keywords.environment) {
+            console.log(
+              `[RecommendationAgent] Environment changed from ${currentSnapshot?.keywords?.environment} to ${keywords.environment}, updating session memory`
+            );
+          }
+
           // Update memory: offset, lastQuery, keywords and add seen IDs
           await RecommendationAgentWithMCP.sessionMemory.set(
             request.sessionId,

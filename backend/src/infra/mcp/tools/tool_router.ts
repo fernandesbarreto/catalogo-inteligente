@@ -97,8 +97,6 @@ NÃO use markdown. Apenas o JSON puro.`;
     // Limpar resposta do GPT que pode vir com markdown
     let cleanContent = content;
 
-    console.log("[intelligentToolRouter] Raw OpenAI response:", content);
-
     // Remover ```json e ``` se presentes
     if (cleanContent.startsWith("```json")) {
       cleanContent = cleanContent.replace(/^```json\s*/, "");
@@ -113,12 +111,9 @@ NÃO use markdown. Apenas o JSON puro.`;
     // Remover quebras de linha e espaços extras
     cleanContent = cleanContent.trim();
 
-    console.log("[intelligentToolRouter] Cleaned content:", cleanContent);
-
     let actions: any;
     try {
       actions = JSON.parse(cleanContent);
-      console.log("[intelligentToolRouter] Parsed actions:", actions);
     } catch (parseError) {
       console.error("[intelligentToolRouter] JSON parse error:", parseError);
       console.error("[intelligentToolRouter] Failed content:", cleanContent);
@@ -176,17 +171,21 @@ NÃO use markdown. Apenas o JSON puro.`;
           hex = colorToHexMap[input.keywords.color];
         }
 
-        // Mapear ambiente das keywords para sceneId
-        const sceneId = input.keywords?.environment
-          ? `${input.keywords.environment}/01`
-          : "sala/01"; // default é sala
+        const environmentMapping: Record<string, string> = {
+          "área externa": "varanda",
+          exterior: "varanda",
+          fachada: "varanda",
+          externa: "varanda",
+          escritorio: "sala",
+          corredor: "sala",
+        };
 
-        console.error(
-          `[intelligentToolRouter] 🏠 Ambiente extraído: ${
-            input.keywords?.environment || "sala (default)"
-          }`
-        );
-        console.error(`[intelligentToolRouter] 🎬 SceneId final: ${sceneId}`);
+        let environment = input.keywords?.environment || "sala";
+        if (environmentMapping[environment]) {
+          environment = environmentMapping[environment];
+        }
+
+        const sceneId = `${environment}/01`;
 
         baseAction.args = {
           sceneId,
@@ -529,19 +528,23 @@ async function toolRouterFallback(
 
   // Route: Image generation when preview/visualization requested or scene/hex provided
   if (wantsImageGeneration(combined) || normalizedHex || maybeSceneId) {
-    // Mapear ambiente das keywords para sceneId no fallback também
-    const sceneId = input.keywords?.environment
-      ? `${input.keywords.environment}/01`
-      : maybeSceneId || "sala/01"; // default é sala
+    const environmentMapping: Record<string, string> = {
+      "área externa": "varanda",
+      exterior: "varanda",
+      fachada: "varanda",
+      externa: "varanda",
+      escritorio: "sala",
+      corredor: "sala",
+    };
 
-    console.error(
-      `[toolRouterFallback] 🏠 Fallback: Ambiente extraído: ${
-        input.keywords?.environment || "sala (default)"
-      }`
-    );
-    console.error(
-      `[toolRouterFallback] 🎬 Fallback: SceneId final: ${sceneId}`
-    );
+    let environment = input.keywords?.environment;
+    if (environment && environmentMapping[environment]) {
+      environment = environmentMapping[environment];
+    }
+
+    const sceneId = environment
+      ? `${environment}/01`
+      : maybeSceneId || "sala/01"; // default é sala
 
     const args: Record<string, any> = {
       sceneId,

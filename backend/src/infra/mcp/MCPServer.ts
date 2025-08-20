@@ -179,6 +179,16 @@ export class MCPServer {
           properties: {
             userMessage: { type: "string" },
             conversationSummary: { type: "string" },
+            keywords: {
+              type: "object",
+              properties: {
+                environment: { type: "string" },
+                color: { type: "string" },
+                style: { type: "string" },
+                mood: { type: "string" },
+                keywords: { type: "array", items: { type: "string" } },
+              },
+            },
             limit: { type: "number" },
             offset: { type: "number" },
           },
@@ -298,6 +308,7 @@ export class MCPServer {
           result = await toolRouter({
             userMessage: args.userMessage,
             conversationSummary: args.conversationSummary,
+            keywords: args.keywords,
             limit: args.limit,
             offset: args.offset,
           });
