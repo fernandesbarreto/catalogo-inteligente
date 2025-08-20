@@ -56,7 +56,8 @@
     "test:retriever": "jest tests/ai/retriever.smoke.spec.ts --verbose",
     "test:routing": "jest tests/ai/agent.routing.spec.ts --verbose",
     "test:e2e": "jest tests/interface/ai.e2e.spec.ts --verbose",
-    "seed": "npx ts-node scripts/seed_paints.ts"
+    "seed": "npx ts-node scripts/seed_paints.ts",
+    "seed:users": "npx ts-node scripts/seed-users.ts"
   },
   "repository": {
     "type": "git",
