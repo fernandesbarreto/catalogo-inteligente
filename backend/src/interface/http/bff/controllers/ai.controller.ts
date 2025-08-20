@@ -195,6 +195,52 @@ export class AiController {
     return response;
   }
 
+  /**
+   * @swagger
+   * /ai/chat:
+   *   post:
+   *     summary: Unified chat endpoint for AI-powered paint recommendations
+   *     description: Processes user messages and provides intelligent paint recommendations with context awareness
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               userMessage:
+   *                 type: string
+   *                 description: User's message or query
+   *               history:
+   *                 type: array
+   *                 items:
+   *                   $ref: '#/components/schemas/ChatMessage'
+   *                 description: Chat history for context
+   *             required:
+   *               - userMessage
+   *     responses:
+   *       200:
+   *         description: Successful response with recommendations
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/RecommendationResponse'
+   *       400:
+   *         description: Bad request - missing userMessage
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async chatUnified(req: Request, res: Response) {
     try {
       const userMessage = (req.body?.userMessage || "").toString();
@@ -240,6 +286,62 @@ export class AiController {
     }
   }
 
+  /**
+   * @swagger
+   * /ai/router:
+   *   post:
+   *     summary: Route user message using MCP (Model Context Protocol)
+   *     description: Analyzes user message and determines which tools should be executed using MCP
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               userMessage:
+   *                 type: string
+   *                 description: User's message to analyze
+   *                 example: "Quero uma tinta verde para a sala"
+   *               history:
+   *                 type: array
+   *                 items:
+   *                   $ref: '#/components/schemas/ChatMessage'
+   *                 description: Chat history for context
+   *             required:
+   *               - userMessage
+   *     responses:
+   *       200:
+   *         description: Successful routing response
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 actions:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                   description: Recommended actions to take
+   *                 rationale:
+   *                   type: string
+   *                   description: Explanation of routing decision
+   *       400:
+   *         description: Bad request - missing userMessage
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async routeWithMCP(req: Request, res: Response) {
     try {
       const userMessage = (req.body?.userMessage || "").toString();
@@ -509,6 +611,43 @@ export class AiController {
     return this.recommendationAgent;
   }
 
+  /**
+   * @swagger
+   * /ai/recommendations:
+   *   post:
+   *     summary: Get paint recommendations using AI
+   *     description: Provides intelligent paint recommendations based on query and filters
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/RecommendationQuery'
+   *           example:
+   *             query: "Preciso de uma tinta azul para o quarto"
+   *     responses:
+   *       200:
+   *         description: Successful recommendations
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/RecommendationResponse'
+   *       400:
+   *         description: Bad request - invalid input
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async recommend(req: Request, res: Response) {
     try {
       // Validar entrada com Zod
@@ -634,6 +773,37 @@ export class AiController {
     }
   }
 
+  /**
+   * @swagger
+   * /ai/search:
+   *   post:
+   *     summary: Semantic search for paints
+   *     description: Performs semantic search to find paints based on natural language query
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/SemanticSearchRequest'
+   *           example:
+   *             query: "tinta azul para quarto infantil"
+   *     responses:
+   *       200:
+   *         description: Successful semantic search results
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/SemanticSearchResponse'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async semanticSearch(req: Request, res: Response) {
     try {
       const { query } = req.body;
@@ -649,6 +819,62 @@ export class AiController {
     }
   }
 
+  /**
+   * @swagger
+   * /ai/palette-image:
+   *   post:
+   *     summary: Generate palette image
+   *     description: Generates a palette image based on paint colors and scene
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               sceneId:
+   *                 type: string
+   *                 description: Scene identifier for image generation
+   *               hex:
+   *                 type: string
+   *                 pattern: "^#[0-9A-Fa-f]{6}$"
+   *                 description: Hex color code
+   *               finish:
+   *                 type: string
+   *                 description: Paint finish type
+   *             required:
+   *               - sceneId
+   *               - hex
+   *     responses:
+   *       200:
+   *         description: Successful image generation
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 imageBase64:
+   *                   type: string
+   *                   description: Base64 encoded image
+   *                 provider:
+   *                   type: string
+   *                   description: Image generation provider used
+   *       400:
+   *         description: Bad request - missing required fields
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async generatePaletteImage(req: Request, res: Response) {
     try {
       const body = req.body as Partial<GenInput>;
@@ -717,6 +943,50 @@ export class AiController {
     }
   }
 
+  /**
+   * @swagger
+   * /ai/recommendations/mcp:
+   *   post:
+   *     summary: Get paint recommendations using MCP (Model Context Protocol)
+   *     description: Provides intelligent paint recommendations using MCP for enhanced tool integration
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/RecommendationQuery'
+   *           example:
+   *             query: "Preciso de uma tinta verde para a sala"
+   *     responses:
+   *       200:
+   *         description: Successful MCP recommendations
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               allOf:
+   *                 - $ref: '#/components/schemas/RecommendationResponse'
+   *                 - type: object
+   *                   properties:
+   *                     mcpEnabled:
+   *                       type: boolean
+   *                       description: Indicates MCP was used for recommendations
+   *       400:
+   *         description: Bad request - invalid input
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async recommendWithMCP(req: Request, res: Response) {
     try {
       // Validar entrada com Zod

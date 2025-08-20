@@ -46,8 +46,8 @@ const publicPaintsCtl = makePaintsController({
   delete: UseCaseFactory.deletePaint(),
 });
 
-router.get("/paints/public", publicPaintsCtl.list);
-router.get("/paints/public/:id", publicPaintsCtl.get);
+router.get("/paints/public", publicPaintsCtl.listPublic);
+router.get("/paints/public/:id", publicPaintsCtl.getPublic);
 
 // GLOBAL AUTHENTICATION MIDDLEWARE
 router.use(requireAuth, attachRoles);
