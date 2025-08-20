@@ -1,9 +1,9 @@
 describe("Retriever Smoke Tests", () => {
-  // Teste simples que verifica se o sistema está funcionando
-  // sem depender de conexão com banco de dados
+  // Simple test that verifies if the system is working
+  // without depending on database connection
 
   test("should have basic functionality", () => {
-    // Verificar se as funções básicas estão disponíveis
+    // Check if basic functions are available
     expect(typeof Date.now).toBe("function");
     expect(typeof Array.isArray).toBe("function");
     expect(typeof console.log).toBe("function");

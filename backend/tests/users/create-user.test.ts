@@ -5,7 +5,7 @@ describe("CreateUser use case", () => {
     const repo = makeRepo();
     const useCase = new CreateUser(repo as any);
 
-    // o repo deve retornar só os campos públicos
+    // the repo should return only public fields
     repo.create.mockResolvedValue({ id: "u1", email: "test@example.com" });
 
     const result = await useCase.exec({
@@ -14,10 +14,10 @@ describe("CreateUser use case", () => {
     });
 
     expect(result).toEqual({ id: "u1", email: "test@example.com" });
-    // o use case deve ter enviado passwordHash (não password) para o repo
+    // the use case should have sent passwordHash (not password) to the repo
     expect(repo.create).toHaveBeenCalledWith({
       email: "test@example.com",
-      passwordHash: expect.any(String), // hash é não-determinístico
+      passwordHash: expect.any(String), // hash is non-deterministic
     });
   });
 

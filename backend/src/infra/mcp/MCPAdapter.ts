@@ -52,7 +52,7 @@ export class MCPAdapter {
 
       const startTime = Date.now();
 
-      // Usar busca semântica por padrão, mas permitir especificar ferramentas
+      // Use semantic search by default, but allow specifying tools
       const toolName = request.tools?.includes("filter_search")
         ? "filter_search"
         : "semantic_search";
@@ -63,11 +63,11 @@ export class MCPAdapter {
           query: request.query,
           filters: {
             ...(request.context?.filters || {}),
-            // Propagar paginação vinda do agente (quando existir)
+            // Propagate pagination from agent (when it exists)
             ...((request as any).context?.offset !== undefined
               ? { offset: (request as any).context.offset }
               : {}),
-            // Excluir IDs já vistos nesta sessão
+            // Exclude already seen IDs in this session
             ...((request as any).context?.excludeIds?.length
               ? { excludeIds: (request as any).context.excludeIds }
               : {}),
@@ -88,15 +88,15 @@ export class MCPAdapter {
         ) {
           toolResult = JSON.parse(result.content[0].text);
         } else {
-          console.error("[MCPAdapter] Resposta inválida do MCP:", result);
+          console.error("[MCPAdapter] Invalid MCP response:", result);
           return null;
         }
       } catch (error) {
-        console.error("[MCPAdapter] Erro ao parsear resultado do MCP:", error);
+        console.error("[MCPAdapter] Error parsing MCP result:", error);
         return null;
       }
 
-      // toolResult pode vir como objeto { picks: [...] } ou array direto
+      // toolResult can come as object { picks: [...] } or direct array
       const picksArray = Array.isArray(toolResult)
         ? toolResult
         : Array.isArray(toolResult?.picks)
@@ -110,34 +110,34 @@ export class MCPAdapter {
         })),
         metadata: {
           model: `mcp-${toolName}`,
-          tokens: 0, // TODO: Implementar contagem de tokens
+          tokens: 0, // TODO: Implement token counting
           latency,
         },
       };
 
-      console.log(`[MCPAdapter] Resposta MCP:`, mcpResponse);
+      console.log(`[MCPAdapter] MCP response:`, mcpResponse);
       return mcpResponse;
     } catch (error) {
-      console.error(`[MCPAdapter] Erro ao processar MCP:`, error);
+      console.error(`[MCPAdapter] Error processing MCP:`, error);
       return null;
     }
   }
 
   async enable() {
     if (this.isEnabled) {
-      console.log(`[MCPAdapter] MCP já está habilitado`);
+      console.log(`[MCPAdapter] MCP is already enabled`);
       return;
     }
 
     try {
-      console.log(`[MCPAdapter] Conectando ao servidor MCP...`);
+      console.log(`[MCPAdapter] Connecting to MCP server...`);
       this.client = new MCPClient(this.mcpCommand, this.mcpArgs);
       await this.client.connect();
 
       this.isEnabled = true;
-      console.log(`[MCPAdapter] MCP habilitado e conectado`);
+      console.log(`[MCPAdapter] MCP enabled and connected`);
     } catch (error) {
-      console.error(`[MCPAdapter] Erro ao conectar ao MCP:`, error);
+      console.error(`[MCPAdapter] Error connecting to MCP:`, error);
       this.isEnabled = false;
       this.client = null;
     }

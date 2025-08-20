@@ -69,7 +69,7 @@ export const useChat = () => {
 
       const data: any = await response.json();
 
-      // Preferir mensagem natural gerada no BFF quando disponível
+      // Prefer natural message generated in BFF when available
       let botContent = data.message as string;
 
       if (!botContent) {

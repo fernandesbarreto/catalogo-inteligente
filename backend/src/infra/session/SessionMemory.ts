@@ -11,8 +11,8 @@ export type SessionFilters = {
 export type ConversationKeywords = {
   environment?: string; // tipo de ambiente (sala, quarto, cozinha, etc.)
   color?: string; // cor principal mencionada
-  style?: string; // estilo mencionado (moderno, clássico, etc.)
-  mood?: string; // clima/atmosfera (tranquilo, energético, etc.)
+  style?: string; // mentioned style (modern, classic, etc.)
+  mood?: string; // atmosphere/mood (calm, energetic, etc.)
   keywords?: string[]; // array de palavras-chave adicionais
 };
 

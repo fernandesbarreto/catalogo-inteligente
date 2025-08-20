@@ -21,7 +21,7 @@ export class AiController {
   }
 
   private async analyzeIntent(userMessage: string, history: any[]) {
-    // Extrair palavras-chave da conversa em vez de toda a conversa
+    // Extract keywords from conversation instead of entire conversation
     const { extractKeywordsFromConversation } = await import(
       "../../../../infra/session/SessionMemory"
     );
@@ -74,18 +74,18 @@ export class AiController {
       message: "",
     };
 
-    // Verificar se precisa gerar imagem
+    // Check if image generation is needed
     const wantsImage =
       routerActions.some((a: any) => a?.tool === "Geração de imagem") ||
       this.isPaletteImageIntent(userMessage);
 
-    // Verificar se é apenas geração de imagem (sem busca de produtos)
+    // Check if it's only image generation (without product search)
     const imageOnly =
       routerActions.length === 1 &&
       routerActions[0]?.tool === "Geração de imagem";
 
     if (wantsImage) {
-      // Chamar tool chat para gerar imagem + resposta
+      // Call chat tool to generate image + response
       const mcp = new MCPClient(
         process.env.MCP_COMMAND || "npm",
         (process.env.MCP_ARGS
@@ -97,18 +97,18 @@ export class AiController {
       let toolRes: any;
       try {
         if (imageOnly) {
-          // Extrair cor da mensagem do usuário
+          // Extract color from user message
           const hex = this.extractColorFromMessage(
             userMessage + history.map((h) => h.content).join(" ")
           );
 
-          // Extrair ambiente da mensagem
+          // Extract environment from message
           const environment = this.extractEnvironmentFromMessage(
             userMessage + history.map((h) => h.content).join(" ")
           );
           const sceneId = `${environment}/01`;
 
-          // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
+          // If it's only image generation, call the generation tool directly
           toolRes = await Promise.race([
             mcp.callTool({
               name: "generate_palette_image",
@@ -120,13 +120,13 @@ export class AiController {
             }),
             new Promise((_, reject) =>
               setTimeout(
-                () => reject(new Error("Timeout na geração de imagem")),
+                () => reject(new Error("Image generation timeout")),
                 60000
               )
             ),
           ]);
         } else {
-          // Se há produtos + imagem, usar o chat
+          // If there are products + image, use chat
           toolRes = await Promise.race([
             mcp.callTool({
               name: "chat",
@@ -136,7 +136,7 @@ export class AiController {
               },
             }),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Timeout no chat")), 30000)
+              setTimeout(() => reject(new Error("Chat timeout")), 30000)
             ),
           ]);
         }
@@ -159,7 +159,7 @@ export class AiController {
       response.message = (payload?.reply || response.message || "").trim();
       if (!response.message) {
         response.message =
-          "Pronto! Gerei a prévia com a parede pintada. Precisa de tinta para mais alguma coisa?";
+          "Done! I generated a preview with the painted wall. Do you need paint for anything else?";
       }
 
       if (imageBase64) {
@@ -172,7 +172,7 @@ export class AiController {
         response.imageIntent = true;
       }
     } else {
-      // Resposta simples sem imagem
+      // Simple response without image
       response.message = await this.formatPicksAsNaturalMessage(
         userMessage,
         response.picks
@@ -192,17 +192,17 @@ export class AiController {
 
       if (!userMessage || typeof userMessage !== "string") {
         return res.status(400).json({
-          error: "userMessage obrigatório",
+          error: "userMessage required",
         });
       }
 
-      // 1. Análise de intenção (internamente)
+      // 1. Intent analysis (internally)
       const routerActions = await this.analyzeIntent(userMessage, history);
       console.log(
         `\n\n\nrouterActions: ${JSON.stringify(routerActions)}\n\n\n`
       );
 
-      // 2. Execução das tools recomendadas
+      // 2. Execute recommended tools
       const result = await this.executeTools(
         userMessage,
         history,
@@ -210,7 +210,7 @@ export class AiController {
         req.headers["x-session-id"]?.toString()
       );
 
-      // 3. Geração de resposta natural
+      // 3. Generate natural response
       const response = await this.generateResponse(
         userMessage,
         history,

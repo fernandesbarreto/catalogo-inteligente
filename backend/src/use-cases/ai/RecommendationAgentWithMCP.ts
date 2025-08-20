@@ -40,7 +40,7 @@ export class RecommendationAgentWithMCP {
   }
 
   async initialize() {
-    // Tentar habilitar MCP se disponível
+    // Try to enable MCP if available
     try {
       await this.mcpAdapter.enable();
     } catch (error) {}
@@ -52,12 +52,12 @@ export class RecommendationAgentWithMCP {
   async recommend(
     request: RecommendationRequest
   ): Promise<RecommendationPick[]> {
-    // Garantir MCP habilitado se solicitado
+    // Ensure MCP is enabled if requested
     if (request.useMCP && !this.mcpAdapter.isMCPEnabled()) {
       await this.initialize();
     }
 
-    // Detecção simples de intenção → gerar filtros a partir da query + histórico + memória de sessão
+    // Simple intent detection → generate filters from query + history + session memory
     const inferredFromQuery = this.inferFiltersFromQuery(request.query);
     const inferredFromHistory = this.inferFiltersFromHistory(
       request.history || []
@@ -89,8 +89,8 @@ export class RecommendationAgentWithMCP {
       },
     };
 
-    // Determinar query efetiva em follow-ups: se o usuário pedir “mais opções”,
-    // usamos a última query persistida; se não houver, caímos para a query atual.
+    // Determine effective query in follow-ups: if user asks for "more options",
+    // we use the last persisted query; if not available, fall back to current query
     let effectiveQuery = request.query;
     if (this.isFollowUpQuery(request.query)) {
       if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
@@ -100,7 +100,7 @@ export class RecommendationAgentWithMCP {
         if (snap?.lastQuery) {
           effectiveQuery = snap.lastQuery;
         } else {
-          // Sem lastQuery na memória, tenta extrair a última pergunta não-follow-up do histórico
+          // Without lastQuery in memory, try to extract the last non-follow-up question from history
           const fromHistory = this.findLastNonFollowUpUserQuery(
             request.history || []
           );
@@ -109,9 +109,9 @@ export class RecommendationAgentWithMCP {
       }
     }
 
-    // Se MCP está habilitado e foi solicitado, orquestrar tools e aplicar RRF
+    // If MCP is enabled and requested, orchestrate tools and apply RRF
     if (request.useMCP && this.mcpAdapter.isMCPEnabled()) {
-      // Estratégia: usar routerActions quando disponíveis; caso contrário, chamar ambas as tools com paginação leve (offset baseado na sessão)
+      // Strategy: use routerActions when available; otherwise, call both tools with light pagination (offset based on session)
       let offset = 0;
       if (request.sessionId) {
         offset = parseInt(request.sessionId.slice(-2), 16) % 20;
@@ -165,7 +165,7 @@ export class RecommendationAgentWithMCP {
       const filterPicks = filterRes?.picks ?? [];
       const semanticPicks = semanticRes?.picks ?? [];
 
-      // Evitar repetição: filtrar IDs já vistos na sessão
+      // Avoid repetition: filter IDs already seen in session
       let combined = this.combineWithRRF(filterPicks, semanticPicks);
       if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
         const snap = await RecommendationAgentWithMCP.sessionMemory.get(
@@ -177,14 +177,14 @@ export class RecommendationAgentWithMCP {
       combined = combined.slice(0, 10);
 
       if (combined.length > 0) {
-        // Atualizar memória de sessão com filtros efetivos e palavras-chave
+        // Update session memory with effective filters and keywords
         if (request.sessionId && RecommendationAgentWithMCP.sessionMemory) {
-          // Extrair palavras-chave da conversa
+          // Extract keywords from conversation
           const keywords = extractKeywordsFromConversation(
             request.history || []
           );
 
-          // Atualizar memória: offset, lastQuery, palavras-chave e adicionar IDs vistos
+          // Update memory: offset, lastQuery, keywords and add seen IDs
           await RecommendationAgentWithMCP.sessionMemory.set(
             request.sessionId,
             {
@@ -211,7 +211,7 @@ export class RecommendationAgentWithMCP {
       }
     }
 
-    // Fallback: nenhum resultado
+    // Fallback: no results
     return [];
   }
 
@@ -264,12 +264,12 @@ export class RecommendationAgentWithMCP {
     else if (/(brilhante|brilho)/.test(q)) filters.finish = "brilhante";
     else if (/(acetinado)/.test(q)) filters.finish = "acetinado";
 
-    // line (opcional, pouca influência)
+    // line (optional, low influence)
     if (/(superlav[áa]vel)/.test(q)) filters.line = "Superlavável";
     else if (/(toque de seda)/.test(q)) filters.line = "Toque de Seda";
     else if (/(fosco completo)/.test(q)) filters.line = "Fosco Completo";
 
-    // color intents (padrões simples)
+    // color intents (simple patterns)
     if (/(branco|branca|white)/.test(q)) filters.color = "branco";
     else if (/(preto|preta|black)/.test(q)) filters.color = "preto";
     else if (/(cinza|cinzento|gray|grey)/.test(q)) filters.color = "cinza";
@@ -289,7 +289,7 @@ export class RecommendationAgentWithMCP {
     for (const msg of history) {
       if (msg.role !== "user") continue;
       const f = this.inferFiltersFromQuery(msg.content);
-      // Preferir menções mais recentes (sobrescreve)
+      // Prefer more recent mentions (overwrites)
       Object.assign(filters, f);
     }
     return filters as {

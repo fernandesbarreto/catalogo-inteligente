@@ -31,7 +31,7 @@ function extractHex(text: string): string | null {
   const m = text.match(/#([0-9a-fA-F]{6})\b/);
   if (m) return `#${m[1]}`;
 
-  // Mapeamento de cores comuns para hex
+  // Common color mapping to hex
   const colorMap: Record<string, string> = {
     vermelho: "#FF0000",
     red: "#FF0000",
@@ -71,7 +71,7 @@ function simpleHeuristicIntent(message: string) {
     /\b(como|como ficaria|como se parece).*\b(imagem|foto|prévia)\b/.test(q);
   const hex = extractHex(message) || "#5FA3D1";
 
-  // Extrair ambiente da mensagem
+  // Extract environment from message
   const environmentPatterns = {
     sala: /\b(sala|living|estar)\b/,
     quarto: /\b(quarto|bedroom|dormitório)\b/,
@@ -146,7 +146,7 @@ export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
         typeof text === "string" ? text : JSON.stringify(text)
       );
     } catch {
-      // fallback para heurística
+      // fallback to heuristic
       decision = null;
     }
   } catch {
@@ -156,29 +156,29 @@ export async function chatTool(input: ChatToolInput): Promise<ChatToolOutput> {
   if (!decision) {
     const h = simpleHeuristicIntent(userText);
 
-    // Se há tintas encontradas e não é intenção de imagem, usar LLM para resposta natural
+    // If there are paints found and it's not image intent, use LLM for natural response
     let reply = "";
     if (picks.length > 0 && !h.wantsImage) {
       try {
-        const system = `Você é um assistente especializado em tintas e acabamentos. Responda de forma natural, sucinta e prestativa.
+        const system = `You are an assistant specialized in paints and finishes. Respond naturally, concisely and helpfully.
         
-Regras:
-- Seja breve e direto ao ponto
-- Use tom prestativo e amigável
-- Mencione 1-2 tintas principais encontradas
-- Inclua informações relevantes como acabamento, cor, linha
-- Pergunte se o usuário quer ver mais opções ou gerar uma prévia
-- Não seja muito formal ou técnico`;
+Rules:
+- Be brief and to the point
+- Use helpful and friendly tone
+- Mention 1-2 main paints found
+- Include relevant information such as finish, color, line
+- Ask if the user wants to see more options or generate a preview
+- Don't be too formal or technical`;
 
-        const user = `Pedido do usuário: "${userText}"
+        const user = `User request: "${userText}"
 
-Tintas encontradas:
+Paints found:
 ${picks
   .slice(0, 3)
   .map((p, i) => `${i + 1}. ${p.reason}`)
   .join("\n")}
 
-Responda de forma natural e sucinta, mencionando as tintas encontradas.`;
+Respond naturally and concisely, mentioning the paints found.`;
 
         const chat = makeChat();
         const resp = await chat.invoke([
@@ -197,18 +197,18 @@ Responda de forma natural e sucinta, mencionando as tintas encontradas.`;
             : ""
         ).trim();
       } catch (error) {
-        console.error("[chatTool] Erro ao gerar resposta com LLM:", error);
-        reply = `Encontrei ${
+        console.error("[chatTool] Error generating response with LLM:", error);
+        reply = `I found ${
           picks.length
-        } tinta(s) adequadas para sua necessidade. ${picks
+        } paint(s) suitable for your need. ${picks
           .slice(0, 2)
           .map((p) => p.reason.split(" - ")[0])
-          .join(", ")} são boas opções.`;
+          .join(", ")} are good options.`;
       }
     } else {
       reply = h.wantsImage
-        ? "Claro! Vou gerar uma prévia aplicada na parede."
-        : "Certo! Posso sugerir tintas ou gerar uma prévia se desejar.";
+        ? "Sure! I'll generate a preview applied to the wall."
+        : "Right! I can suggest paints or generate a preview if you'd like.";
     }
 
     decision = {
@@ -228,14 +228,14 @@ Responda de forma natural e sucinta, mencionando as tintas encontradas.`;
     // If the reply implies image, soften it
     decision.reply =
       decision.reply ||
-      "Certo! Posso listar opções de tintas ou gerar uma prévia se você pedir explicitamente.";
+      "Right! I can list paint options or generate a preview if you ask explicitly.";
   }
 
   if (!decision.generateImage) {
     return { reply: decision.reply };
   }
 
-  // Garantir parâmetros mínimos
+  // Ensure minimum parameters
   const sceneId = decision.sceneId || "varanda/moderna-01";
   const hex = decision.hex || extractHex(userText) || "#5FA3D1";
   const finish = decision.finish;
