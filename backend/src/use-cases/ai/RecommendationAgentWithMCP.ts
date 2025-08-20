@@ -132,7 +132,17 @@ export class RecommendationAgentWithMCP {
       // Strategy: use routerActions when available; otherwise, call both tools with light pagination (offset based on session)
       let offset = 0;
       if (request.sessionId) {
-        offset = parseInt(request.sessionId.slice(-2), 16) % 20;
+        // Check if this is a fresh session (no existing session memory)
+        const snap = await RecommendationAgentWithMCP.sessionMemory?.get(
+          request.sessionId
+        );
+        if (snap) {
+          // Use stored offset for existing sessions
+          offset = snap.nextOffset || 0;
+        } else {
+          // Fresh session - start with offset 0
+          offset = 0;
+        }
       }
 
       let filterRes: any = null;

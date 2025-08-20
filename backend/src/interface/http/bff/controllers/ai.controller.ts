@@ -115,22 +115,18 @@ export class AiController {
       let toolRes: any;
       try {
         if (imageOnly) {
-          // Extrair cor da mensagem do usuário
-          const hex = this.extractColorFromMessage(userMessage, history);
-
-          // Extract environment from message
-          const environment = this.extractEnvironmentFromMessage(
-            userMessage,
-            history
+          // Use the parameters from router actions instead of re-extracting
+          const imageAction = routerActions.find(
+            (a: any) => a?.tool === "Geração de imagem"
           );
-          const sceneId = `${environment}/01`;
+          const { sceneId, hex, size } = imageAction?.args || {};
 
           // If it's only image generation, call the generation tool directly
           toolRes = await Promise.race([
             mcpAdapter.callTool("generate_palette_image", {
-              sceneId,
-              hex: hex,
-              size: "1024x1024",
+              sceneId: sceneId || "sala/01",
+              hex: hex || "#5FA3D1",
+              size: size || "1024x1024",
             }),
             new Promise((_, reject) =>
               setTimeout(
