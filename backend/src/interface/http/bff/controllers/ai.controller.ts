@@ -21,11 +21,11 @@ export class AiController {
   }
 
   private async analyzeIntent(userMessage: string, history: any[]) {
-    const summary = history
-      .slice(-8)
-      .map((m) => `${m.role}: ${m.content}`)
-      .join(" \n ")
-      .slice(0, 600);
+    // Extrair palavras-chave da conversa em vez de toda a conversa
+    const { extractKeywordsFromConversation } = await import(
+      "../../../../infra/session/SessionMemory"
+    );
+    const keywords = extractKeywordsFromConversation(history);
 
     const mcp = new MCPClient(
       process.env.MCP_COMMAND || "npm",
@@ -37,7 +37,7 @@ export class AiController {
     await mcp.connect();
     const result = await mcp.callTool({
       name: "tool_router",
-      arguments: { userMessage, conversationSummary: summary },
+      arguments: { userMessage, keywords },
     });
     mcp.disconnect();
 
@@ -232,12 +232,11 @@ export class AiController {
           .json({ actions: [], rationale: "userMessage obrigatório" });
       }
 
-      // Build a concise conversation summary from last messages
-      const last = history.slice(-8);
-      const summary = last
-        .map((m) => `${m.role}: ${m.content}`)
-        .join(" \n ")
-        .slice(0, 600);
+      // Extrair palavras-chave da conversa em vez de toda a conversa
+      const { extractKeywordsFromConversation } = await import(
+        "../../../../infra/session/SessionMemory"
+      );
+      const keywords = extractKeywordsFromConversation(history);
 
       const mcp = new MCPClient(
         process.env.MCP_COMMAND || "npm",
@@ -250,7 +249,7 @@ export class AiController {
         name: "tool_router",
         arguments: {
           userMessage,
-          conversationSummary: summary,
+          keywords,
           limit: req.body?.limit,
           offset: req.body?.offset,
         },
