@@ -101,6 +101,9 @@ done
 echo "📦 Instalando dependências do backend..."
 npm install
 
+echo "🔧 Gerando cliente Prisma..."
+npx prisma generate
+
 # Run database seeds
 echo "🌱 Executando seeds do banco de dados..."
 echo "👥 Criando usuários de teste..."
