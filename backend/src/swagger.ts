@@ -438,56 +438,7 @@ const options: swaggerJsdoc.Options = {
           },
           required: ["imageUrl", "success"],
         },
-        MCPTool: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "Tool name",
-            },
-            description: {
-              type: "string",
-              description: "Tool description",
-            },
-            parameters: {
-              type: "object",
-              description: "Tool parameters schema",
-            },
-          },
-          required: ["name", "description"],
-        },
-        MCPHealthResponse: {
-          type: "object",
-          properties: {
-            status: {
-              type: "string",
-              enum: ["healthy", "unhealthy"],
-              description: "MCP server health status",
-            },
-            tools: {
-              type: "array",
-              items: {
-                type: "string",
-              },
-              description: "Available tool names",
-            },
-          },
-          required: ["status"],
-        },
-        SessionResetResponse: {
-          type: "object",
-          properties: {
-            success: {
-              type: "boolean",
-              description: "Whether the session reset was successful",
-            },
-            error: {
-              type: "string",
-              description: "Error message if reset failed",
-            },
-          },
-          required: ["success"],
-        },
+
         Pagination: {
           type: "object",
           properties: {

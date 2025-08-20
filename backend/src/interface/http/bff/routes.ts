@@ -9,7 +9,6 @@ import { makePaintsController } from "./controllers/paints.controller";
 import { makeAuthController } from "./controllers/auth.controller";
 import { makeUserRolesController } from "./controllers/user-roles.controller";
 import aiRoutes from "./routes/ai.routes";
-import mcpRoutes from "./routes/mcp.routes";
 
 // Auth
 import { requireAuth } from "../middlewares/requireAuth";
@@ -57,9 +56,6 @@ router.use(requireAuth, attachRoles);
 // AI ROUTES
 router.use("/ai", aiRoutes);
 
-// MCP ROUTES
-router.use("/mcp", mcpRoutes);
-
 // USERS (somente ADMIN)
 const usersCtl = makeUsersController({
   create: UseCaseFactory.createUser(),
@@ -84,27 +80,5 @@ router.delete(
   requireRole("ADMIN"),
   userRolesCtl.remove
 );
-
-// PAINTS
-const paintsCtl = makePaintsController({
-  create: UseCaseFactory.createPaint(),
-  update: UseCaseFactory.updatePaint(),
-  list: UseCaseFactory.listPaints(),
-  get: UseCaseFactory.getPaint(),
-  delete: UseCaseFactory.deletePaint(),
-});
-
-// leitura para qualquer autenticado
-router.get("/paints", requireRole("ADMIN", "EDITOR", "VIEWER"), paintsCtl.list);
-router.get(
-  "/paints/:id",
-  requireRole("ADMIN", "EDITOR", "VIEWER"),
-  paintsCtl.get
-);
-
-// escrita restrita
-router.post("/paints", requireRole("ADMIN", "EDITOR"), paintsCtl.create);
-router.put("/paints/:id", requireRole("ADMIN", "EDITOR"), paintsCtl.update);
-router.delete("/paints/:id", requireRole("ADMIN"), paintsCtl.remove);
 
 export default router;

@@ -171,27 +171,13 @@ ASSETS_SCENES_DIR=/app/assetes/scenes
 #### **AI Endpoints**
 
 - `POST /bff/ai/chat` - Chat unificado com IA
-- `POST /bff/ai/recommendations` - Recomendações inteligentes
-- `POST /bff/ai/recommendations/mcp` - Recomendações via MCP
 - `POST /bff/ai/search` - Busca semântica
-- `POST /bff/ai/router` - Roteamento de mensagens via MCP
 - `POST /bff/ai/palette-image` - Geração de imagens de paleta
-
-#### **MCP Endpoints**
-
-- `GET /bff/mcp/health` - Status do servidor MCP
-- `GET /bff/mcp/tools` - Lista ferramentas disponíveis
-- `POST /bff/mcp/recommend` - Recomendações via MCP
-- `POST /bff/mcp/session/reset` - Reset de sessão
 
 #### **Paint Endpoints**
 
 - `GET /bff/paints/public` - Listar tintas (público)
 - `GET /bff/paints/public/{id}` - Obter tinta por ID (público)
-- `GET /bff/paints` - Listar tintas (autenticado)
-- `POST /bff/paints` - Criar tinta (Admin/Editor)
-- `PUT /bff/paints/{id}` - Atualizar tinta (Admin/Editor)
-- `DELETE /bff/paints/{id}` - Deletar tinta (Admin)
 
 #### **Auth Endpoints**
 
