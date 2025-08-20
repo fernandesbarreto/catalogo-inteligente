@@ -9,14 +9,14 @@ import { hexToColorName } from "./hexToColor";
 function mapEnvironmentToSceneId(environment?: string): string {
   const environmentMap: Record<string, string> = {
     sala: "sala/01",
-    quarto: "quarto/01", 
+    quarto: "quarto/01",
     cozinha: "cozinha/01",
     banheiro: "banheiro/01",
     varanda: "varanda/01",
     escritorio: "escritorio/01",
     corredor: "corredor/01",
   };
-  
+
   return environmentMap[environment || "sala"] || "sala/01"; // default é sala
 }
 

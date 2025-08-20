@@ -70,7 +70,7 @@ function simpleHeuristicIntent(message: string) {
     ) ||
     /\b(como|como ficaria|como se parece).*\b(imagem|foto|prévia)\b/.test(q);
   const hex = extractHex(message) || "#5FA3D1";
-  
+
   // Extrair ambiente da mensagem
   const environmentPatterns = {
     sala: /\b(sala|living|estar)\b/,
@@ -81,7 +81,7 @@ function simpleHeuristicIntent(message: string) {
     escritorio: /\b(escritório|office|estudo)\b/,
     corredor: /\b(corredor|hall|passagem)\b/,
   };
-  
+
   let environment = "sala"; // default
   for (const [env, pattern] of Object.entries(environmentPatterns)) {
     if (pattern.test(q)) {
@@ -89,7 +89,7 @@ function simpleHeuristicIntent(message: string) {
       break;
     }
   }
-  
+
   const sceneId = `${environment}/01`;
   const finishMatch = q.match(
     /\b(fosco|acetinado|semibrilho|semi-brilho|brilhante)\b/
