@@ -98,29 +98,34 @@ for i in {1..30}; do
     sleep 2
 done
 
-echo "🌐 Iniciando Frontend..."
-cd ../frontend
+# Run database seeds
+echo "🌱 Executando seeds do banco de dados..."
+echo "👥 Criando usuários de teste..."
+npm run seed:users
 
-# Install frontend dependencies if node_modules doesn't exist
-if [ ! -d "node_modules" ]; then
-    echo "📦 Instalando dependências do frontend..."
-    npm install
-fi
+echo "🎨 Criando tintas de exemplo..."
+npm run seed
 
-# Start frontend
-PORT=3001 npm start &
+echo "✅ Seeds executados com sucesso!"
 
 echo ""
-echo "✅ Serviços iniciados!"
-echo "📱 Frontend: http://localhost:3001"
+echo "✅ Backend e banco de dados iniciados!"
 echo "🔧 Backend: http://localhost:3000"
 echo "📚 API Docs: http://localhost:3000/bff/docs"
 echo ""
+echo "🌐 Para iniciar o Frontend, execute em outro terminal:"
+echo "   cd frontend"
+echo "   npm install (se necessário)"
+echo "   PORT=3001 npm start"
+echo ""
 echo "💡 Dicas:"
 echo "   - Edite backend/.env para adicionar suas chaves de API"
-echo "   - Use Ctrl+C para parar todos os serviços"
+echo "   - Use Ctrl+C para parar o backend"
 echo "   - Ver logs: docker compose logs -f (no diretório backend)"
+echo "   - Frontend estará disponível em: http://localhost:3001"
 echo ""
-
-# Wait for user to stop
-wait
+echo "👥 Usuários de teste criados:"
+echo "   - Admin: admin@example.com / admin123"
+echo "   - Editor: editor@example.com / editor123"
+echo "   - Viewer: viewer@example.com / viewer123"
+echo ""
