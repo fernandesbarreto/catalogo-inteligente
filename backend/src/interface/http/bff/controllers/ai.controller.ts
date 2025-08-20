@@ -101,7 +101,10 @@ export class AiController {
           const hex = this.extractColorFromMessage(userMessage, history);
 
           // Extrair ambiente da mensagem
-          const environment = this.extractEnvironmentFromMessage(userMessage, history);
+          const environment = this.extractEnvironmentFromMessage(
+            userMessage,
+            history
+          );
           const sceneId = `${environment}/01`;
 
           // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
@@ -363,7 +366,7 @@ export class AiController {
   }
 
   private extractColorFromMessage(
-    userMessage: string, 
+    userMessage: string,
     history: Array<{ role: "user" | "assistant"; content: string }>
   ): string {
     const colorKeywords = [
@@ -450,7 +453,7 @@ export class AiController {
   }
 
   private extractEnvironmentFromMessage(
-    userMessage: string, 
+    userMessage: string,
     history: Array<{ role: "user" | "assistant"; content: string }>
   ): string {
     const environmentPatterns = {
