@@ -98,11 +98,8 @@ for i in {1..30}; do
     sleep 2
 done
 
-# Install backend dependencies if node_modules doesn't exist
-if [ ! -d "node_modules" ]; then
-    echo "📦 Instalando dependências do backend..."
-    npm install
-fi
+echo "📦 Instalando dependências do backend..."
+npm install
 
 # Run database seeds
 echo "🌱 Executando seeds do banco de dados..."
