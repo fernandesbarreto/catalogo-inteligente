@@ -1,25 +1,7 @@
 import { Router } from "express";
-import { PrismaClient } from "@prisma/client";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "../../../swagger";
-
-// Repos
-import { UserRepoPrisma } from "../../../infra/db/repositories/UserRepoPrisma";
-import { PaintRepoPrisma } from "../../../infra/db/repositories/PaintRepoPrisma";
-
-// Use cases - Users
-import { CreateUser } from "../../../use-cases/users/CreateUser";
-import { UpdateUser } from "../../../use-cases/users/UpdateUser";
-import { ListUsers } from "../../../use-cases/users/ListUsers";
-import { GetUser } from "../../../use-cases/users/GetUser";
-import { DeleteUser } from "../../../use-cases/users/DeleteUser";
-
-// Use cases - Paints
-import { CreatePaint } from "../../../use-cases/paints/CreatePaint";
-import { UpdatePaint } from "../../../use-cases/paints/UpdatePaint";
-import { ListPaints } from "../../../use-cases/paints/ListPaints";
-import { GetPaint } from "../../../use-cases/paints/GetPaint";
-import { DeletePaint } from "../../../use-cases/paints/DeletePaint";
+import { UseCaseFactory } from "../../../infra/factories/UseCaseFactory";
 
 // Controllers
 import { makeUsersController } from "./controllers/users.controller";
@@ -30,14 +12,13 @@ import aiRoutes from "./routes/ai.routes";
 import mcpRoutes from "./routes/mcp.routes";
 
 // Auth
-import { Login } from "../../../use-cases/auth/login"; // <- confira caixa/arquivo
 import { requireAuth } from "../middlewares/requireAuth";
 import { attachRoles } from "../middlewares/attachRoles";
 import { requireRole } from "../middlewares/requireRole";
 
 const router = Router();
-const prisma = new PrismaClient();
 
+// PUBLIC ROUTES (no authentication required)
 // Swagger documentation
 router.use("/docs", swaggerUi.serve);
 router.get(
@@ -52,12 +33,26 @@ router.get("/docs/swagger.json", (req, res) => {
   res.send(specs);
 });
 
-const userRepo = new UserRepoPrisma(prisma);
-const paintRepo = new PaintRepoPrisma(prisma);
-
 // AUTH
-const authCtl = makeAuthController(new Login(userRepo));
+const authCtl = makeAuthController(UseCaseFactory.login());
 router.post("/auth/login", authCtl.login);
+
+// PUBLIC PAINTS ENDPOINT (for browsing)
+const publicPaintsCtl = makePaintsController({
+  create: UseCaseFactory.createPaint(),
+  update: UseCaseFactory.updatePaint(),
+  list: UseCaseFactory.listPaints(),
+  get: UseCaseFactory.getPaint(),
+  delete: UseCaseFactory.deletePaint(),
+});
+
+router.get("/paints/public", publicPaintsCtl.list);
+router.get("/paints/public/:id", publicPaintsCtl.get);
+
+// GLOBAL AUTHENTICATION MIDDLEWARE
+router.use(requireAuth, attachRoles);
+
+// PROTECTED ROUTES (authentication required)
 
 // AI ROUTES
 router.use("/ai", aiRoutes);
@@ -65,27 +60,13 @@ router.use("/ai", aiRoutes);
 // MCP ROUTES
 router.use("/mcp", mcpRoutes);
 
-// PUBLIC PAINTS ENDPOINT (for browsing)
-const publicPaintsCtl = makePaintsController({
-  create: new CreatePaint(paintRepo),
-  update: new UpdatePaint(paintRepo),
-  list: new ListPaints(paintRepo),
-  get: new GetPaint(paintRepo),
-  delete: new DeletePaint(paintRepo),
-});
-
-router.get("/paints/public", publicPaintsCtl.list);
-router.get("/paints/public/:id", publicPaintsCtl.get);
-
-router.use(requireAuth, attachRoles);
-
 // USERS (somente ADMIN)
 const usersCtl = makeUsersController({
-  create: new CreateUser(userRepo),
-  update: new UpdateUser(userRepo),
-  list: new ListUsers(userRepo),
-  get: new GetUser(userRepo),
-  delete: new DeleteUser(userRepo),
+  create: UseCaseFactory.createUser(),
+  update: UseCaseFactory.updateUser(),
+  list: UseCaseFactory.listUsers(),
+  get: UseCaseFactory.getUser(),
+  delete: UseCaseFactory.deleteUser(),
 });
 
 router.get("/users", requireRole("ADMIN"), usersCtl.list);
@@ -95,7 +76,7 @@ router.put("/users/:id", requireRole("ADMIN"), usersCtl.update);
 router.delete("/users/:id", requireRole("ADMIN"), usersCtl.remove);
 
 // USER ROLES mgmt (somente ADMIN)
-const userRolesCtl = makeUserRolesController(userRepo);
+const userRolesCtl = makeUserRolesController(UseCaseFactory.getUserRepo());
 router.get("/users/:id/roles", requireRole("ADMIN"), userRolesCtl.list);
 router.post("/users/:id/roles", requireRole("ADMIN"), userRolesCtl.add);
 router.delete(
@@ -106,11 +87,11 @@ router.delete(
 
 // PAINTS
 const paintsCtl = makePaintsController({
-  create: new CreatePaint(paintRepo),
-  update: new UpdatePaint(paintRepo),
-  list: new ListPaints(paintRepo),
-  get: new GetPaint(paintRepo),
-  delete: new DeletePaint(paintRepo),
+  create: UseCaseFactory.createPaint(),
+  update: UseCaseFactory.updatePaint(),
+  list: UseCaseFactory.listPaints(),
+  get: UseCaseFactory.getPaint(),
+  delete: UseCaseFactory.deletePaint(),
 });
 
 // leitura para qualquer autenticado

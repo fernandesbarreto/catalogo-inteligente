@@ -1,17 +1,15 @@
 import { IPaintRepo } from "../../domain/repositories/IPaintRepo";
 import { IEmbeddingProvider } from "../../domain/repositories/IEmbeddingProvider";
-import { EmbeddingProviderFactory } from "../../infra/ai/embeddings/EmbeddingProviderFactory";
+import {
+  PaintValidationError,
+  EmbeddingGenerationError,
+} from "../../domain/errors/PaintErrors";
 
 export class CreatePaint {
-  private embeddingProvider: IEmbeddingProvider;
-
   constructor(
     private paints: IPaintRepo,
-    embeddingProvider?: IEmbeddingProvider
-  ) {
-    this.embeddingProvider =
-      embeddingProvider || EmbeddingProviderFactory.getProvider();
-  }
+    private embeddingProvider: IEmbeddingProvider
+  ) {}
 
   private async generateEmbedding(text: string): Promise<number[]> {
     return this.embeddingProvider.generateEmbedding(text);
@@ -51,27 +49,42 @@ export class CreatePaint {
     features?: string | null;
     line?: string | null;
   }) {
-    if (!input.name?.trim()) throw new Error("name is required");
-    if (!input.color?.trim()) throw new Error("color is required");
-    if (!input.colorHex?.trim()) throw new Error("colorHex is required");
-    if (!input.surfaceType?.trim()) throw new Error("surfaceType is required");
-    if (!input.roomType?.trim()) throw new Error("roomType is required");
-    if (!input.finish?.trim()) throw new Error("finish is required");
+    // Validation
+    if (!input.name?.trim()) throw new PaintValidationError("name is required");
+    if (!input.color?.trim())
+      throw new PaintValidationError("color is required");
+    if (!input.colorHex?.trim())
+      throw new PaintValidationError("colorHex is required");
+    if (!input.surfaceType?.trim())
+      throw new PaintValidationError("surfaceType is required");
+    if (!input.roomType?.trim())
+      throw new PaintValidationError("roomType is required");
+    if (!input.finish?.trim())
+      throw new PaintValidationError("finish is required");
 
     // Check if embedding provider is available
     if (!this.embeddingProvider.isAvailable()) {
-      throw new Error(
-        "Embedding provider is not available for embedding generation"
-      );
+      throw new EmbeddingGenerationError("Embedding provider is not available");
     }
 
-    // Create text for embedding
-    const paintText = this.createPaintText(input);
+    try {
+      // Create text for embedding
+      const paintText = this.createPaintText(input);
 
-    // Generate embedding
-    const embedding = await this.generateEmbedding(paintText);
+      // Generate embedding
+      const embedding = await this.generateEmbedding(paintText);
 
-    // Create paint with embedding
-    return this.paints.createWithEmbedding(input, embedding);
+      // Create paint with embedding
+      return this.paints.createWithEmbedding(input, embedding);
+    } catch (error) {
+      if (error instanceof EmbeddingGenerationError) {
+        throw error;
+      }
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      throw new EmbeddingGenerationError(
+        `Failed to generate embedding: ${errorMessage}`
+      );
+    }
   }
 }
