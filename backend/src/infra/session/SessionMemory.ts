@@ -175,13 +175,16 @@ export function extractKeywordsFromConversation(
 
   const environmentPatterns = [
     {
+      env: "varanda",
+      pattern: /\b(varanda|balcony|sacada)\b/,
+    },
+    {
       env: "área externa",
       pattern: /\b(área externa|exterior|fachada|externa)\b/,
     },
     { env: "escritorio", pattern: /\b(escritório|office|estudo)\b/ },
     { env: "banheiro", pattern: /\b(banheiro|bathroom|wc)\b/ },
     { env: "cozinha", pattern: /\b(cozinha|kitchen)\b/ },
-    { env: "varanda", pattern: /\b(varanda|balcony|sacada)\b/ },
     { env: "corredor", pattern: /\b(corredor|hall|passagem)\b/ },
     { env: "quarto", pattern: /\b(quarto|bedroom|dormitório)\b/ },
     { env: "sala", pattern: /\b(sala|living|estar)\b/ },

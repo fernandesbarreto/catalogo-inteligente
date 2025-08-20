@@ -27,22 +27,40 @@ export class AiController {
     );
     const keywords = extractKeywordsFromConversation(history);
 
-    const mcp = new MCPClient(
-      process.env.MCP_COMMAND || "npm",
-      (process.env.MCP_ARGS
-        ? process.env.MCP_ARGS.split(" ")
-        : ["run", "mcp"]) as string[]
-    );
+    // Use the MCPAdapter for tool routing to ensure consistent connection management
+    const agent = await this.getRecommendationAgent();
 
-    await mcp.connect();
-    const result = await mcp.callTool({
-      name: "tool_router",
-      arguments: { userMessage, keywords },
-    });
-    mcp.disconnect();
+    // Ensure MCP is enabled
+    if (!agent["mcpAdapter"]?.isMCPEnabled()) {
+      await agent.initialize();
+    }
 
-    const payload = JSON.parse(result.content?.[0]?.text || "{}");
-    return Array.isArray(payload?.actions) ? payload.actions : [];
+    // Use the MCPAdapter's callTool method for tool routing
+    const mcpAdapter = agent["mcpAdapter"];
+    if (!mcpAdapter) {
+      console.error(
+        "[AiController] MCP adapter not available for tool routing"
+      );
+      return [];
+    }
+
+    try {
+      const result = await mcpAdapter.callTool("tool_router", {
+        userMessage,
+        keywords,
+      });
+
+      if (!result) {
+        console.error("[AiController] No result from tool_router");
+        return [];
+      }
+
+      const payload = JSON.parse(result.content?.[0]?.text || "{}");
+      return Array.isArray(payload?.actions) ? payload.actions : [];
+    } catch (error) {
+      console.error("[AiController] Error calling tool_router:", error);
+      return [];
+    }
   }
 
   private async executeTools(
@@ -85,14 +103,14 @@ export class AiController {
       routerActions[0]?.tool === "Geração de imagem";
 
     if (wantsImage) {
-      // Call chat tool to generate image + response
-      const mcp = new MCPClient(
-        process.env.MCP_COMMAND || "npm",
-        (process.env.MCP_ARGS
-          ? process.env.MCP_ARGS.split(" ")
-          : ["run", "mcp"]) as string[]
-      );
-      await mcp.connect();
+      // Use the MCPAdapter for consistent connection management
+      const agent = await this.getRecommendationAgent();
+      const mcpAdapter = agent["mcpAdapter"];
+
+      if (!mcpAdapter?.isMCPEnabled()) {
+        console.error("[AiController] MCP not enabled for image generation");
+        return response;
+      }
 
       let toolRes: any;
       try {
@@ -109,13 +127,10 @@ export class AiController {
 
           // If it's only image generation, call the generation tool directly
           toolRes = await Promise.race([
-            mcp.callTool({
-              name: "generate_palette_image",
-              arguments: {
-                sceneId,
-                hex: hex,
-                size: "1024x1024",
-              },
+            mcpAdapter.callTool("generate_palette_image", {
+              sceneId,
+              hex: hex,
+              size: "1024x1024",
             }),
             new Promise((_, reject) =>
               setTimeout(
@@ -127,20 +142,23 @@ export class AiController {
         } else {
           // If there are products + image, use chat
           toolRes = await Promise.race([
-            mcp.callTool({
-              name: "chat",
-              arguments: {
-                messages: [...history, { role: "user", content: userMessage }],
-                picks: response.picks,
-              },
+            mcpAdapter.callTool("chat", {
+              messages: [...history, { role: "user", content: userMessage }],
+              picks: response.picks,
             }),
             new Promise((_, reject) =>
               setTimeout(() => reject(new Error("Chat timeout")), 30000)
             ),
           ]);
         }
-      } finally {
-        mcp.disconnect();
+      } catch (error) {
+        console.error("[AiController] Error in image generation:", error);
+        return response;
+      }
+
+      if (!toolRes) {
+        console.error("[AiController] No result from image generation tool");
+        return response;
       }
 
       const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");

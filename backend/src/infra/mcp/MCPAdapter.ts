@@ -57,22 +57,24 @@ export class MCPAdapter {
         ? "filter_search"
         : "semantic_search";
 
+      const toolArgs = {
+        query: request.query,
+        filters: {
+          ...(request.context?.filters || {}),
+          // Propagate pagination from agent (when it exists)
+          ...((request as any).context?.offset !== undefined
+            ? { offset: (request as any).context.offset }
+            : {}),
+          // Exclude already seen IDs in this session
+          ...((request as any).context?.excludeIds?.length
+            ? { excludeIds: (request as any).context.excludeIds }
+            : {}),
+        },
+      };
+
       const result = await this.client.callTool({
         name: toolName,
-        arguments: {
-          query: request.query,
-          filters: {
-            ...(request.context?.filters || {}),
-            // Propagate pagination from agent (when it exists)
-            ...((request as any).context?.offset !== undefined
-              ? { offset: (request as any).context.offset }
-              : {}),
-            // Exclude already seen IDs in this session
-            ...((request as any).context?.excludeIds?.length
-              ? { excludeIds: (request as any).context.excludeIds }
-              : {}),
-          },
-        },
+        arguments: toolArgs,
       });
 
       const latency = Date.now() - startTime;
@@ -167,6 +169,27 @@ export class MCPAdapter {
     } catch (error) {
       console.error(`[MCPAdapter] Erro ao listar ferramentas:`, error);
       return [];
+    }
+  }
+
+  async callTool(
+    toolName: string,
+    arguments_: Record<string, any>
+  ): Promise<any> {
+    if (!this.isEnabled || !this.client) {
+      console.log(`[MCPAdapter] MCP desabilitado ou não conectado`);
+      return null;
+    }
+
+    try {
+      const result = await this.client.callTool({
+        name: toolName,
+        arguments: arguments_,
+      });
+      return result;
+    } catch (error) {
+      console.error(`[MCPAdapter] Error calling tool ${toolName}:`, error);
+      return null;
     }
   }
 }
