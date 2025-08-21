@@ -1,4 +1,5 @@
 import { listScenesTool } from "./list_scenes";
+import OpenAI from "openai";
 
 type AllowedToolName =
   | "Procurar tinta no Prisma por filtro"
@@ -7,7 +8,14 @@ type AllowedToolName =
 
 export interface ToolRouterInput {
   userMessage: string;
-  conversationSummary?: string;
+  conversationSummary?: string; // mantido para compatibilidade
+  keywords?: {
+    environment?: string;
+    color?: string;
+    style?: string;
+    mood?: string;
+    keywords?: string[];
+  };
   limit?: number;
   offset?: number;
 }
@@ -25,6 +33,245 @@ export interface ToolRouterOutput {
 }
 
 const IMAGE_SIZE_DEFAULT = "1024x1024" as const;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+async function intelligentToolRouter(
+  input: ToolRouterInput
+): Promise<ToolRouterOutput> {
+  const user = sanitizeString(input.userMessage || "") || "";
+
+  // Construir contexto das keywords se disponível
+  let contextText = "";
+  if (input.keywords) {
+    const keywords = input.keywords;
+    const keywordParts = [];
+
+    if (keywords.environment)
+      keywordParts.push(`ambiente: ${keywords.environment}`);
+    if (keywords.color) keywordParts.push(`cor: ${keywords.color}`);
+    if (keywords.style) keywordParts.push(`estilo: ${keywords.style}`);
+    if (keywords.mood) keywordParts.push(`clima: ${keywords.mood}`);
+    if (keywords.keywords && keywords.keywords.length > 0) {
+      keywordParts.push(`palavras-chave: ${keywords.keywords.join(", ")}`);
+    }
+
+    contextText = keywordParts.join("; ");
+  }
+
+  const prompt = `
+Você é um assistente que decide quais ferramentas usar baseado na mensagem do usuário.
+
+Ferramentas disponíveis:
+1. "Procurar tinta no Prisma por filtro" - Para buscar tintas específicas com filtros (cor, ambiente, acabamento, etc.)
+2. "Busca semântica de tinta nos embeddings" - Para buscar tintas baseado em descrições vagas ou inspirações
+3. "Geração de imagem" - Para gerar/mostrar imagens de como ficaria a cor aplicada
+
+Contexto da conversa: ${contextText || "Nenhum contexto específico"}
+Mensagem do usuário: "${user}"
+
+IMPORTANTE: Retorne APENAS um array JSON válido, SEM markdown, SEM explicações adicionais.
+Cada item deve ter: {"tool": "nome_da_ferramenta", "confidence": 0.9, "rationale": "explicação"}
+
+Exemplos de resposta correta:
+[{"tool": "Procurar tinta no Prisma por filtro", "confidence": 0.9, "rationale": "Busca específica por cor e ambiente"}]
+[{"tool": "Geração de imagem", "confidence": 0.9, "rationale": "Usuário quer ver resultado visual"}]
+
+NÃO use markdown. Apenas o JSON puro.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 500,
+    });
+
+    const content = response.choices[0]?.message?.content?.trim();
+    if (!content) {
+      throw new Error("Empty response from OpenAI");
+    }
+
+    // Limpar resposta do GPT que pode vir com markdown
+    let cleanContent = content;
+
+    // Remover ```json e ``` se presentes
+    if (cleanContent.startsWith("```json")) {
+      cleanContent = cleanContent.replace(/^```json\s*/, "");
+    }
+    if (cleanContent.startsWith("```")) {
+      cleanContent = cleanContent.replace(/^```\s*/, "");
+    }
+    if (cleanContent.endsWith("```")) {
+      cleanContent = cleanContent.replace(/\s*```$/, "");
+    }
+
+    // Remover quebras de linha e espaços extras
+    cleanContent = cleanContent.trim();
+
+    let actions: any;
+    try {
+      actions = JSON.parse(cleanContent);
+    } catch (parseError) {
+      console.error("[intelligentToolRouter] JSON parse error:", parseError);
+      console.error("[intelligentToolRouter] Failed content:", cleanContent);
+      throw new Error(
+        `Resposta JSON inválida do OpenAI: ${(parseError as Error).message}`
+      );
+    }
+
+    // Validar e processar as ações
+    const validActions = actions
+      .filter(
+        (action: any) =>
+          action.tool &&
+          typeof action.confidence === "number" &&
+          action.rationale
+      )
+      .slice(0, 2); // Máximo 2 ações
+
+    // Adicionar argumentos baseados no tipo de tool e contexto
+    const processedActions = validActions.map((action: any) => {
+      const baseAction = {
+        tool: action.tool as AllowedToolName,
+        confidence: action.confidence,
+        rationale: action.rationale,
+        args: {} as Record<string, any>,
+      };
+
+      // Configurar argumentos baseado no tipo de tool
+      if (action.tool === "Geração de imagem") {
+        // Mapear cor das keywords para hex se disponível
+        let hex: string | undefined;
+        if (input.keywords?.color) {
+          const colorToHexMap: Record<string, string> = {
+            branco: "#FFFFFF",
+            preto: "#000000",
+            azul: "#1D39C9",
+            vermelho: "#D14747",
+            verde: "#61D161",
+            amarelo: "#F4D125",
+            rosa: "#CE7EA6",
+            marrom: "#93591F",
+            laranja: "#EC7F13",
+            bege: "#E2CD9C",
+            roxo: "#AF25F4",
+            cinza: "#737373",
+            turquesa: "#47D1AF",
+            coral: "#DD673C",
+            dourado: "#D1BE61",
+            prateado: "#737373",
+            vinho: "#C91D73",
+            jade: "#1F9346",
+            aqua: "#96E9E2",
+            ciano: "#1F9393",
+          };
+          hex = colorToHexMap[input.keywords.color];
+        }
+
+        const environmentMapping: Record<string, string> = {
+          "área externa": "varanda",
+          exterior: "varanda",
+          fachada: "varanda",
+          externa: "varanda",
+          escritorio: "sala",
+          corredor: "sala",
+        };
+
+        let environment = input.keywords?.environment || "sala";
+        if (environmentMapping[environment]) {
+          environment = environmentMapping[environment];
+        }
+
+        const sceneId = `${environment}/01`;
+
+        baseAction.args = {
+          sceneId,
+          ...(hex ? { hex } : {}),
+          size: IMAGE_SIZE_DEFAULT,
+        };
+      } else if (action.tool === "Procurar tinta no Prisma por filtro") {
+        // Extract filters from keywords and user message
+        const extractedFilters = extractFiltersFromInput(input);
+
+        baseAction.args = {
+          query: user,
+          filters: extractedFilters,
+          ...(input.limit ? { limit: input.limit } : {}),
+          ...(input.offset ? { offset: input.offset } : {}),
+        };
+
+        baseAction.args.fallbackToSemantic = true;
+      } else if (action.tool === "Busca semântica de tinta nos embeddings") {
+        // Extract filters from keywords and user message
+        const extractedFilters = extractFiltersFromInput(input);
+
+        baseAction.args = {
+          query: user,
+          filters: extractedFilters,
+          top_k: Math.min(input.limit || 8, 20) || 8,
+          ...(input.offset ? { offset: input.offset } : {}),
+        };
+      }
+
+      return baseAction;
+    });
+
+    return {
+      actions: processedActions,
+      rationale:
+        processedActions.length === 0
+          ? "Nenhuma ferramenta relevante identificada"
+          : undefined,
+    };
+  } catch (error) {
+    console.error("[intelligentToolRouter] Error:", error);
+
+    // Fallback para lógica antiga em caso de erro
+    return toolRouterFallback(input);
+  }
+}
+
+function extractFiltersFromInput(input: ToolRouterInput): Record<string, any> {
+  const filters: Record<string, any> = {};
+
+  // Extract room type from keywords
+  if (input.keywords?.environment) {
+    const environmentToRoomTypeMap: Record<string, string> = {
+      varanda: "área externa",
+      "área externa": "área externa",
+      exterior: "área externa",
+      fachada: "área externa",
+      externa: "área externa",
+      sala: "sala",
+      quarto: "quarto",
+      cozinha: "cozinha",
+      banheiro: "banheiro",
+      escritorio: "escritório",
+      corredor: "sala",
+    };
+
+    const roomType = environmentToRoomTypeMap[input.keywords.environment];
+    if (roomType) {
+      filters.roomType = roomType;
+    }
+  }
+
+  // Extract color from keywords
+  if (input.keywords?.color) {
+    filters.color = input.keywords.color;
+  }
+
+  // If no filters from keywords, try to extract from user message
+  if (Object.keys(filters).length === 0) {
+    const userFilters = detectStructuredFilters(input.userMessage || "");
+    Object.assign(filters, userFilters.filters);
+  }
+
+  return filters;
+}
 
 function sanitizeString(value: string | undefined): string | undefined {
   if (!value) return undefined;
@@ -122,7 +369,7 @@ function detectStructuredFilters(text: string) {
       filters.roomType = "banheiro";
     else if (/(escrit[óo]rio|home office)/i.test(q))
       filters.roomType = "escritório";
-    else if (/(exterior|externa|fachada|área externa)/i.test(q))
+    else if (/(exterior|externa|fachada|área externa|varanda)/i.test(q))
       filters.roomType = "área externa";
   }
 
@@ -206,7 +453,7 @@ async function validateSceneIdMaybe(sceneId?: string) {
 function wantsImageGeneration(text: string): boolean {
   const q = text.toLowerCase();
   return (
-    (/(gerar|gere|mostrar|ver|prévia|preview|visualizar|repaint|aplicar)\b/.test(
+    (/(gerar|gere|mostrar|mostre|ver|prévia|preview|visualizar|repaint|aplicar)\b/.test(
       q
     ) &&
       /(imagem|foto|cena|parede|wall)/.test(q)) ||
@@ -215,12 +462,36 @@ function wantsImageGeneration(text: string): boolean {
   );
 }
 
-export async function toolRouter(
+async function toolRouterFallback(
   input: ToolRouterInput
 ): Promise<ToolRouterOutput> {
   const user = sanitizeString(input.userMessage || "") || "";
-  const summary = sanitizeString(input.conversationSummary || "");
-  const combined = `${summary ? summary + "\n" : ""}${user}`.slice(-4000);
+
+  // Usar palavras-chave se disponíveis, senão usar summary completo
+  let contextText = "";
+  if (input.keywords) {
+    const keywords = input.keywords;
+    const keywordParts = [];
+
+    if (keywords.environment)
+      keywordParts.push(`ambiente: ${keywords.environment}`);
+    if (keywords.color) keywordParts.push(`cor: ${keywords.color}`);
+    if (keywords.style) keywordParts.push(`estilo: ${keywords.style}`);
+    if (keywords.mood) keywordParts.push(`clima: ${keywords.mood}`);
+    if (keywords.keywords && keywords.keywords.length > 0) {
+      keywordParts.push(`palavras-chave: ${keywords.keywords.join(", ")}`);
+    }
+
+    contextText = keywordParts.join("; ");
+  } else {
+    // Fallback para o summary completo (compatibilidade)
+    const summary = sanitizeString(input.conversationSummary || "");
+    contextText = summary || "";
+  }
+
+  const combined = `${contextText ? contextText + "\n" : ""}${user}`.slice(
+    -4000
+  );
 
   const { limit, offset } = parsePagination(
     combined,
@@ -237,7 +508,38 @@ export async function toolRouter(
   // Image-specific params
   const sceneIdKV = combined.match(/\bsceneId\s*[:=]\s*([\w\-/]+)\b/i)?.[1];
   const maybeSceneId = await validateSceneIdMaybe(sceneIdKV);
-  const normalizedHex = normalizeHexMaybe(hex || extractHex(combined));
+
+  // Mapear cor das keywords para hex se disponível
+  let keywordHex: string | undefined;
+  if (input.keywords?.color) {
+    const colorToHexMap: Record<string, string> = {
+      branco: "#FFFFFF",
+      preto: "#000000",
+      azul: "#1D39C9",
+      vermelho: "#D14747",
+      verde: "#61D161",
+      amarelo: "#F4D125",
+      rosa: "#CE7EA6",
+      marrom: "#93591F",
+      laranja: "#EC7F13",
+      bege: "#E2CD9C",
+      roxo: "#AF25F4",
+      cinza: "#737373",
+      turquesa: "#47D1AF",
+      coral: "#DD673C",
+      dourado: "#D1BE61",
+      prateado: "#737373",
+      vinho: "#C91D73",
+      jade: "#1F9346",
+      aqua: "#96E9E2",
+      ciano: "#1F9393",
+    };
+    keywordHex = colorToHexMap[input.keywords.color];
+  }
+
+  const normalizedHex = normalizeHexMaybe(
+    keywordHex || hex || extractHex(combined)
+  );
 
   const actions: ToolRouterAction[] = [];
 
@@ -269,6 +571,44 @@ export async function toolRouter(
       rationale:
         "Pedido com filtros/atributos estruturados para retornar produtos do catálogo.",
     });
+
+    // Add fallback flag to indicate that semantic search should be used if filter search returns 0 results
+    args.fallbackToSemantic = true;
+  }
+
+  // Route: Image generation when preview/visualization requested or scene/hex provided
+  if (wantsImageGeneration(combined) || normalizedHex || maybeSceneId) {
+    const environmentMapping: Record<string, string> = {
+      "área externa": "varanda",
+      exterior: "varanda",
+      fachada: "varanda",
+      externa: "varanda",
+      escritorio: "sala",
+      corredor: "sala",
+    };
+
+    let environment = input.keywords?.environment;
+    if (environment && environmentMapping[environment]) {
+      environment = environmentMapping[environment];
+    }
+
+    const sceneId = environment
+      ? `${environment}/01`
+      : maybeSceneId || "sala/01"; // default é sala
+
+    const args: Record<string, any> = {
+      sceneId,
+      ...(normalizedHex ? { hex: normalizedHex } : {}),
+      size: IMAGE_SIZE_DEFAULT,
+    };
+
+    actions.push({
+      tool: "Geração de imagem",
+      args,
+      confidence: wantsImageGeneration(combined) ? 0.9 : 0.6,
+      rationale:
+        "Usuário pediu para visualizar/aplicar cor em cena; parâmetros normalizados.",
+    });
   }
 
   // Route: Semantic search for fuzzy exploratory intent
@@ -296,23 +636,6 @@ export async function toolRouter(
       confidence: hasExplicit ? 0.7 : 0.85,
       rationale:
         "Consulta vaga/descritiva traduzida em busca semântica com filtros opcionais.",
-    });
-  }
-
-  // Route: Image generation when preview/visualization requested or scene/hex provided
-  if (wantsImageGeneration(combined) || normalizedHex || maybeSceneId) {
-    const args: Record<string, any> = {
-      sceneId: maybeSceneId || "varanda/moderna-01",
-      ...(normalizedHex ? { hex: normalizedHex } : {}),
-      size: IMAGE_SIZE_DEFAULT,
-    };
-
-    actions.push({
-      tool: "Geração de imagem",
-      args,
-      confidence: wantsImageGeneration(combined) ? 0.9 : 0.6,
-      rationale:
-        "Usuário pediu para visualizar/aplicar cor em cena; parâmetros normalizados.",
     });
   }
 
@@ -363,3 +686,6 @@ export async function toolRouter(
     rationale: actions.length === 0 ? "No relevant tools found" : undefined,
   };
 }
+
+// Export da nova função inteligente como padrão
+export const toolRouter = intelligentToolRouter;

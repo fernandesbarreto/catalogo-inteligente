@@ -21,7 +21,7 @@ export async function generatePaletteImageFast(
   const maskPath = path.join(sceneDir, "mask.png");
 
   if (!fs.existsSync(basePath) || !fs.existsSync(maskPath)) {
-    throw new Error(`Scene not found or missing assets for '${sceneId}'`);
+    throw new Error(`Cena não encontrada ou assets ausentes para '${sceneId}'`);
   }
 
   // Load images

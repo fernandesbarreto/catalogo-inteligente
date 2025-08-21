@@ -76,7 +76,7 @@ export class MCPServer {
           error: {
             code: -32700,
             message: "Parse error",
-            data: error instanceof Error ? error.message : "Unknown error",
+            data: error instanceof Error ? error.message : "Erro desconhecido",
           },
         };
         console.log(JSON.stringify(errorResponse));
@@ -120,7 +120,7 @@ export class MCPServer {
         error: {
           code: -32603,
           message: "Internal error",
-          data: error instanceof Error ? error.message : "Unknown error",
+          data: error instanceof Error ? error.message : "Erro desconhecido",
         },
       };
     }
@@ -179,6 +179,16 @@ export class MCPServer {
           properties: {
             userMessage: { type: "string" },
             conversationSummary: { type: "string" },
+            keywords: {
+              type: "object",
+              properties: {
+                environment: { type: "string" },
+                color: { type: "string" },
+                style: { type: "string" },
+                mood: { type: "string" },
+                keywords: { type: "array", items: { type: "string" } },
+              },
+            },
             limit: { type: "number" },
             offset: { type: "number" },
           },
@@ -298,6 +308,7 @@ export class MCPServer {
           result = await toolRouter({
             userMessage: args.userMessage,
             conversationSummary: args.conversationSummary,
+            keywords: args.keywords,
             limit: args.limit,
             offset: args.offset,
           });
@@ -309,6 +320,31 @@ export class MCPServer {
 
         case "filter_search":
           result = await this.filterSearch.execute(args.query, args.filters);
+
+          if (
+            args.fallbackToSemantic &&
+            Array.isArray(result) &&
+            result.length === 0
+          ) {
+            try {
+              const semanticResult = await this.semanticSearch.execute(
+                args.query,
+                args.filters
+              );
+              if (Array.isArray(semanticResult) && semanticResult.length > 0) {
+                console.log(
+                  `[MCPServer] Semantic search fallback found ${semanticResult.length} results`
+                );
+                result = semanticResult;
+              }
+            } catch (fallbackError) {
+              console.error(
+                "[MCPServer] Error in semantic search fallback:",
+                fallbackError
+              );
+              // Keep the original empty result if fallback fails
+            }
+          }
           break;
 
         case "list_scenes":
@@ -326,7 +362,7 @@ export class MCPServer {
           break;
 
         default:
-          throw new Error(`Tool '${name}' not found`);
+          throw new Error(`Ferramenta '${name}' não encontrada`);
       }
 
       const latency = Date.now() - startTime;

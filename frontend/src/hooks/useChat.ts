@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Message } from "../types";
 
-export const useChat = () => {
+export const useChat = (token?: string | null) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -14,18 +14,13 @@ export const useChat = () => {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
 
-  // Ensure a persistent session id for chat memory
+  // Generate a new session id on each page load to clear history
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("paint-chat-session");
-      if (stored) {
-        setSessionId(stored);
-      } else {
-        const id =
-          window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-        localStorage.setItem("paint-chat-session", id);
-        setSessionId(id);
-      }
+      // Always generate a new session ID on page load
+      const id =
+        window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      setSessionId(id);
     } catch {
       // Fallback non-persistent
       if (!sessionId) setSessionId(`${Date.now()}-${Math.random()}`);
@@ -51,12 +46,18 @@ export const useChat = () => {
         content: m.content,
       }));
 
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "x-session-id": sessionId || "",
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch("http://localhost:3000/bff/ai/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-session-id": sessionId || "",
-        },
+        headers,
         body: JSON.stringify({
           userMessage: newUserMessage.content,
           history,
@@ -64,12 +65,20 @@ export const useChat = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        if (response.status === 401) {
+          throw new Error("Sessão expirada. Por favor, faça login novamente.");
+        }
+        if (response.status === 403) {
+          throw new Error("Acesso negado. Verifique suas permissões.");
+        }
+        throw new Error(
+          `Erro no servidor (${response.status}). Tente novamente.`
+        );
       }
 
       const data: any = await response.json();
 
-      // Preferir mensagem natural gerada no BFF quando disponível
+      // Prefer natural message generated in BFF when available
       let botContent = data.message as string;
 
       if (!botContent) {
@@ -112,11 +121,15 @@ export const useChat = () => {
 
       setMessages((prev) => [...prev, botMessage]);
     } catch (err) {
+      const errorContent =
+        err instanceof Error
+          ? err.message
+          : "Desculpe, tive um problema ao processar sua solicitação. Pode tentar novamente?";
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "bot",
-        content:
-          "Desculpe, tive um problema ao processar sua solicitação. Pode tentar novamente?",
+        content: errorContent,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

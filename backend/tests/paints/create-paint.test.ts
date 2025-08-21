@@ -80,7 +80,7 @@ describe("CreatePaint", () => {
       generateEmbedding: jest.fn(),
       isAvailable: jest.fn().mockReturnValue(false),
     };
-    
+
     const repo = makeRepo();
     const uc = new CreatePaint(repo as any, unavailableProvider);
 
@@ -93,6 +93,6 @@ describe("CreatePaint", () => {
         roomType: "bedroom",
         finish: "matte",
       })
-    ).rejects.toThrow("Embedding provider is not available for embedding generation");
+    ).rejects.toThrow("Provedor de embedding não está disponível");
   });
 });

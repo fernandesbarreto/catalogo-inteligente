@@ -68,7 +68,7 @@ describe("Login use case", () => {
 
     await expect(
       useCase.exec({ email: "", password: "secret123" })
-    ).rejects.toThrow("Invalid credentials");
+    ).rejects.toThrow("Credenciais inválidas");
   });
 
   it("Should fail with missing password", async () => {
@@ -77,6 +77,6 @@ describe("Login use case", () => {
 
     await expect(
       useCase.exec({ email: "test@example.com", password: "" })
-    ).rejects.toThrow("Invalid credentials");
+    ).rejects.toThrow("Credenciais inválidas");
   });
 });

@@ -5,6 +5,21 @@ import { generatePaletteImageFast } from "./generate_palette_image_fast";
 import { GenInput, GenOutput } from "../../../domain/images/types";
 import { hexToColorName } from "./hexToColor";
 
+// Mapeia ambiente das keywords para sceneId
+function mapEnvironmentToSceneId(environment?: string): string {
+  const environmentMap: Record<string, string> = {
+    sala: "sala/01",
+    quarto: "quarto/01",
+    cozinha: "cozinha/01",
+    banheiro: "banheiro/01",
+    varanda: "varanda/01",
+    escritorio: "escritorio/01",
+    corredor: "corredor/01",
+  };
+
+  return environmentMap[environment || "sala"] || "sala/01"; // default é sala
+}
+
 const getAssetsDir = () =>
   process.env.ASSETS_SCENES_DIR ||
   path.resolve(__dirname, "../../../assets/scenes");
@@ -18,14 +33,23 @@ function buildPrompt(hex: string, finish?: string) {
 export async function generatePaletteImage(
   input: GenInput
 ): Promise<GenOutput> {
+  console.error(
+    `[generatePaletteImage] 🚀 INICIANDO - Input:`,
+    JSON.stringify(input, null, 2)
+  );
   const provider = (process.env.IMAGE_PROVIDER || "local").toLowerCase();
+  console.error(`[generatePaletteImage] 🔧 Provider configurado: ${provider}`);
 
   if (provider === "stability" && process.env.STABILITY_API_KEY) {
+    console.error(`[generatePaletteImage] 🎨 Usando Stability AI`);
     try {
       return await generateWithStability(input);
     } catch (e) {
       // fallback local se Stability falhar
-      console.error("[Stability fallback to local]", e);
+      console.error(
+        "[generatePaletteImage] ❌ Stability falhou, usando fallback local:",
+        e
+      );
       return generatePaletteImageFast(input);
     }
   }
@@ -174,13 +198,15 @@ async function generateWithStability(input: GenInput): Promise<GenOutput> {
   const maskPath = path.join(sceneDir, "mask.png");
 
   if (!fs.existsSync(basePath) || !fs.existsSync(maskPath)) {
-    throw new Error(`Scene not found or missing assets for '${sceneId}'`);
+    throw new Error(`Cena não encontrada ou assets ausentes para '${sceneId}'`);
   }
 
   const prompt =
-    `Paint only the wall in ${hex}${finish ? ` (${finish})` : ""}. ` +
+    `Paint only the wall in ${hexToColorName(hex)}${
+      finish ? ` (${finish})` : ""
+    }. ` +
     `Wall with smooth and uniform paint; preserve furniture, floor and lighting; no text/logos.`;
-  console.log(`\n\n\nprompt: ${prompt}\n\n\n`);
+  console.error(`[generateWithStability] 🎨 PROMPT: ${prompt}`);
   const sizeStr = size || "1024x1024";
 
   // Base RGBA
@@ -255,7 +281,7 @@ async function generateWithOpenAI(input: GenInput): Promise<GenOutput> {
   const maskPath = path.join(sceneDir, "mask.png");
 
   if (!fs.existsSync(basePath) || !fs.existsSync(maskPath)) {
-    throw new Error(`Scene not found or missing assets for '${sceneId}'`);
+    throw new Error(`Cena não encontrada ou assets ausentes para '${sceneId}'`);
   }
 
   const prompt = buildPrompt(hex, finish);

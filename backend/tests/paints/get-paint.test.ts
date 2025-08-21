@@ -24,7 +24,9 @@ describe("GetPaint", () => {
     const repo = makeRepo();
     repo.findById.mockResolvedValue(null);
     const uc = new GetPaint(repo as any);
-    const out = await uc.exec("missing");
-    expect(out).toBeNull();
+
+    await expect(uc.exec("missing")).rejects.toThrow(
+      "Tinta com id missing não encontrada"
+    );
   });
 });

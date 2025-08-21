@@ -144,7 +144,7 @@ export const makeUsersController = (uc: any) => ({
    */
   get: async (req: Request, res: Response) => {
     const r = await uc.get.exec(req.params.id);
-    if (!r) return res.status(404).json({ message: "Not found" });
+    if (!r) return res.status(404).json({ message: "Não encontrado" });
     res.json(r);
   },
 

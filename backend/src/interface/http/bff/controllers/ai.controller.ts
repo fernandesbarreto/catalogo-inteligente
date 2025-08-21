@@ -21,28 +21,46 @@ export class AiController {
   }
 
   private async analyzeIntent(userMessage: string, history: any[]) {
-    const summary = history
-      .slice(-8)
-      .map((m) => `${m.role}: ${m.content}`)
-      .join(" \n ")
-      .slice(0, 600);
-
-    const mcp = new MCPClient(
-      process.env.MCP_COMMAND || "npm",
-      (process.env.MCP_ARGS
-        ? process.env.MCP_ARGS.split(" ")
-        : ["run", "mcp"]) as string[]
+    // Extract keywords from conversation instead of entire conversation
+    const { extractKeywordsFromConversation } = await import(
+      "../../../../infra/session/SessionMemory"
     );
+    const keywords = extractKeywordsFromConversation(history);
 
-    await mcp.connect();
-    const result = await mcp.callTool({
-      name: "tool_router",
-      arguments: { userMessage, conversationSummary: summary },
-    });
-    mcp.disconnect();
+    // Use the MCPAdapter for tool routing to ensure consistent connection management
+    const agent = await this.getRecommendationAgent();
 
-    const payload = JSON.parse(result.content?.[0]?.text || "{}");
-    return Array.isArray(payload?.actions) ? payload.actions : [];
+    // Ensure MCP is enabled
+    if (!agent["mcpAdapter"]?.isMCPEnabled()) {
+      await agent.initialize();
+    }
+
+    // Use the MCPAdapter's callTool method for tool routing
+    const mcpAdapter = agent["mcpAdapter"];
+    if (!mcpAdapter) {
+      console.error(
+        "[AiController] MCP adapter not available for tool routing"
+      );
+      return [];
+    }
+
+    try {
+      const result = await mcpAdapter.callTool("tool_router", {
+        userMessage,
+        keywords,
+      });
+
+      if (!result) {
+        console.error("[AiController] No result from tool_router");
+        return [];
+      }
+
+      const payload = JSON.parse(result.content?.[0]?.text || "{}");
+      return Array.isArray(payload?.actions) ? payload.actions : [];
+    } catch (error) {
+      console.error("[AiController] Error calling tool_router:", error);
+      return [];
+    }
   }
 
   private async executeTools(
@@ -74,66 +92,69 @@ export class AiController {
       message: "",
     };
 
-    // Verificar se precisa gerar imagem
+    // Check if image generation is needed
     const wantsImage =
       routerActions.some((a: any) => a?.tool === "Geração de imagem") ||
       this.isPaletteImageIntent(userMessage);
 
-    // Verificar se é apenas geração de imagem (sem busca de produtos)
+    // Check if it's only image generation (without product search)
     const imageOnly =
       routerActions.length === 1 &&
       routerActions[0]?.tool === "Geração de imagem";
 
     if (wantsImage) {
-      // Chamar tool chat para gerar imagem + resposta
-      const mcp = new MCPClient(
-        process.env.MCP_COMMAND || "npm",
-        (process.env.MCP_ARGS
-          ? process.env.MCP_ARGS.split(" ")
-          : ["run", "mcp"]) as string[]
-      );
-      await mcp.connect();
+      // Use the MCPAdapter for consistent connection management
+      const agent = await this.getRecommendationAgent();
+      const mcpAdapter = agent["mcpAdapter"];
+
+      if (!mcpAdapter?.isMCPEnabled()) {
+        console.error("[AiController] MCP not enabled for image generation");
+        return response;
+      }
 
       let toolRes: any;
       try {
         if (imageOnly) {
-          // Extrair cor da mensagem do usuário
-          const hex = this.extractColorFromMessage(userMessage);
+          // Use the parameters from router actions instead of re-extracting
+          const imageAction = routerActions.find(
+            (a: any) => a?.tool === "Geração de imagem"
+          );
+          const { sceneId, hex, size } = imageAction?.args || {};
 
-          // Se é apenas geração de imagem, chamar diretamente a ferramenta de geração
+          // If it's only image generation, call the generation tool directly
           toolRes = await Promise.race([
-            mcp.callTool({
-              name: "generate_palette_image",
-              arguments: {
-                sceneId: "varanda/moderna-01",
-                hex: hex,
-                size: "1024x1024",
-              },
+            mcpAdapter.callTool("generate_palette_image", {
+              sceneId: sceneId || "sala/01",
+              hex: hex || "#5FA3D1",
+              size: size || "1024x1024",
             }),
             new Promise((_, reject) =>
               setTimeout(
-                () => reject(new Error("Timeout na geração de imagem")),
+                () => reject(new Error("Image generation timeout")),
                 60000
               )
             ),
           ]);
         } else {
-          // Se há produtos + imagem, usar o chat
+          // If there are products + image, use chat
           toolRes = await Promise.race([
-            mcp.callTool({
-              name: "chat",
-              arguments: {
-                messages: [...history, { role: "user", content: userMessage }],
-                picks: response.picks,
-              },
+            mcpAdapter.callTool("chat", {
+              messages: [...history, { role: "user", content: userMessage }],
+              picks: response.picks,
             }),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Timeout no chat")), 30000)
+              setTimeout(() => reject(new Error("Chat timeout")), 30000)
             ),
           ]);
         }
-      } finally {
-        mcp.disconnect();
+      } catch (error) {
+        console.error("[AiController] Error in image generation:", error);
+        return response;
+      }
+
+      if (!toolRes) {
+        console.error("[AiController] No result from image generation tool");
+        return response;
       }
 
       const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
@@ -151,7 +172,7 @@ export class AiController {
       response.message = (payload?.reply || response.message || "").trim();
       if (!response.message) {
         response.message =
-          "Pronto! Gerei a prévia com a parede pintada. Quer ajustar cena, acabamento ou tom?";
+          "Pronto! Gerei uma prévia com a parede pintada. Precisa de tinta para mais alguma coisa?";
       }
 
       if (imageBase64) {
@@ -164,7 +185,7 @@ export class AiController {
         response.imageIntent = true;
       }
     } else {
-      // Resposta simples sem imagem
+      // Simple response without image
       response.message = await this.formatPicksAsNaturalMessage(
         userMessage,
         response.picks
@@ -174,6 +195,52 @@ export class AiController {
     return response;
   }
 
+  /**
+   * @swagger
+   * /ai/chat:
+   *   post:
+   *     summary: Unified chat endpoint for AI-powered paint recommendations
+   *     description: Processes user messages and provides intelligent paint recommendations with context awareness
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               userMessage:
+   *                 type: string
+   *                 description: User's message or query
+   *               history:
+   *                 type: array
+   *                 items:
+   *                   $ref: '#/components/schemas/ChatMessage'
+   *                 description: Chat history for context
+   *             required:
+   *               - userMessage
+   *     responses:
+   *       200:
+   *         description: Successful response with recommendations
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/RecommendationResponse'
+   *       400:
+   *         description: Bad request - missing userMessage
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async chatUnified(req: Request, res: Response) {
     try {
       const userMessage = (req.body?.userMessage || "").toString();
@@ -188,13 +255,13 @@ export class AiController {
         });
       }
 
-      // 1. Análise de intenção (internamente)
+      // 1. Intent analysis (internally)
       const routerActions = await this.analyzeIntent(userMessage, history);
       console.log(
         `\n\n\nrouterActions: ${JSON.stringify(routerActions)}\n\n\n`
       );
 
-      // 2. Execução das tools recomendadas
+      // 2. Execute recommended tools
       const result = await this.executeTools(
         userMessage,
         history,
@@ -202,7 +269,7 @@ export class AiController {
         req.headers["x-session-id"]?.toString()
       );
 
-      // 3. Geração de resposta natural
+      // 3. Generate natural response
       const response = await this.generateResponse(
         userMessage,
         history,
@@ -216,59 +283,6 @@ export class AiController {
       return res.status(500).json({
         error: "internal_error",
       });
-    }
-  }
-
-  async routeWithMCP(req: Request, res: Response) {
-    try {
-      const userMessage = (req.body?.userMessage || "").toString();
-      const history = (req.body?.history || []) as Array<{
-        role: "user" | "assistant";
-        content: string;
-      }>;
-      if (!userMessage || typeof userMessage !== "string") {
-        return res
-          .status(400)
-          .json({ actions: [], rationale: "userMessage obrigatório" });
-      }
-
-      // Build a concise conversation summary from last messages
-      const last = history.slice(-8);
-      const summary = last
-        .map((m) => `${m.role}: ${m.content}`)
-        .join(" \n ")
-        .slice(0, 600);
-
-      const mcp = new MCPClient(
-        process.env.MCP_COMMAND || "npm",
-        (process.env.MCP_ARGS
-          ? process.env.MCP_ARGS.split(" ")
-          : ["run", "mcp"]) as string[]
-      );
-      await mcp.connect();
-      const result = await mcp.callTool({
-        name: "tool_router",
-        arguments: {
-          userMessage,
-          conversationSummary: summary,
-          limit: req.body?.limit,
-          offset: req.body?.offset,
-        },
-      });
-      mcp.disconnect();
-      const payload = JSON.parse(result.content?.[0]?.text || "{}");
-      // Ensure shape
-      if (
-        !payload ||
-        typeof payload !== "object" ||
-        !Array.isArray(payload.actions)
-      ) {
-        return res.json({ actions: [], rationale: "router_invalid_response" });
-      }
-      return res.json(payload);
-    } catch (error) {
-      console.error("[AiController] routeWithMCP error", error);
-      return res.json({ actions: [], rationale: "router_error" });
     }
   }
 
@@ -359,7 +373,10 @@ export class AiController {
     return colorMap[normalizedColor] || "#5FA3D1"; // fallback para azul médio
   }
 
-  private extractColorFromMessage(message: string): string {
+  private extractColorFromMessage(
+    userMessage: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>
+  ): string {
     const colorKeywords = [
       "branco",
       "branca",
@@ -422,14 +439,60 @@ export class AiController {
       "sky",
     ];
 
-    const messageLower = message.toLowerCase();
+    // First, try to find color in the current user message
+    const userMessageLower = userMessage.toLowerCase();
     for (const color of colorKeywords) {
-      if (messageLower.includes(color)) {
+      if (userMessageLower.includes(color)) {
         return this.mapColorToHex(color);
       }
     }
 
+    // If no color found in user message, search in history
+    for (const message of history) {
+      const messageLower = message.content.toLowerCase();
+      for (const color of colorKeywords) {
+        if (messageLower.includes(color)) {
+          return this.mapColorToHex(color);
+        }
+      }
+    }
+
     return "#5FA3D1"; // fallback para azul médio
+  }
+
+  private extractEnvironmentFromMessage(
+    userMessage: string,
+    history: Array<{ role: "user" | "assistant"; content: string }>
+  ): string {
+    const environmentPatterns = {
+      sala: /\b(sala|living|estar)\b/,
+      quarto: /\b(quarto|bedroom|dormitório)\b/,
+      cozinha: /\b(cozinha|kitchen)\b/,
+      banheiro: /\b(banheiro|bathroom|wc)\b/,
+      varanda: /\b(varanda|balcony|sacada)\b/,
+      escritorio: /\b(escritório|office|estudo)\b/,
+      corredor: /\b(corredor|hall|passagem)\b/,
+    };
+
+    // First, try to find environment in the current user message
+    const lowerUserMessage = userMessage.toLowerCase();
+    for (const [env, pattern] of Object.entries(environmentPatterns)) {
+      if (pattern.test(lowerUserMessage)) {
+        return env;
+      }
+    }
+
+    // If no environment found in user message, search in history
+    for (const message of history) {
+      const lowerMessage = message.content.toLowerCase();
+      for (const [env, pattern] of Object.entries(environmentPatterns)) {
+        if (pattern.test(lowerMessage)) {
+          return env;
+        }
+      }
+    }
+
+    return "sala"; // default
   }
 
   private async getRecommendationAgent(): Promise<RecommendationAgentWithMCP> {
@@ -440,131 +503,37 @@ export class AiController {
     return this.recommendationAgent;
   }
 
-  async recommend(req: Request, res: Response) {
-    try {
-      // Validar entrada com Zod
-      const validatedQuery = RecommendationQuerySchema.parse(req.body);
-
-      const agent = await this.getRecommendationAgent();
-      // If router suggests Prisma, prioritize filter_search only
-      const routerActions = (req.body?.routerActions || []) as Array<any>;
-      const wantsFilterOnly = Array.isArray(routerActions)
-        ? routerActions.some(
-            (a) => a?.tool === "Procurar tinta no Prisma por filtro"
-          )
-        : false;
-
-      if (routerActions.length > 0) {
-      }
-
-      const result = await agent.recommend({
-        query: validatedQuery.query,
-        context: {
-          filters: validatedQuery.filters,
-        },
-        sessionId:
-          (req as any).session?.id || req.headers["x-session-id"]?.toString(),
-        history: (req.body && req.body.history) || [],
-        useMCP: true,
-        routerActions,
-      });
-
-      // Converter para o formato esperado pelo frontend
-      const picks = result.map((pick) => ({
-        id: pick.id,
-        reason: pick.reason,
-      }));
-      // Mensagem via MCP chat tool: decide se gera imagem e retorna no chat
-      const response = {
-        picks,
-        notes: `Encontradas ${result.length} tintas usando MCP.`,
-      } as any;
-
-      // Only call chat tool if we have picks OR if router suggests image generation
-      const explicitAsk = this.isPaletteImageIntent(validatedQuery.query);
-      const wantsImage =
-        routerActions.some((a) => a?.tool === "Geração de imagem") ||
-        explicitAsk;
-      const shouldCallChat = wantsImage;
-
-      if (shouldCallChat) {
-        try {
-          const mcp = new MCPClient(
-            process.env.MCP_COMMAND || "npm",
-            (process.env.MCP_ARGS
-              ? process.env.MCP_ARGS.split(" ")
-              : ["run", "mcp"]) as string[]
-          );
-          await mcp.connect();
-          const messages = (
-            [...(validatedQuery.history || [])] as any[]
-          ).concat([{ role: "user", content: validatedQuery.query }]);
-          const toolRes = await mcp.callTool({
-            name: "chat",
-            arguments: { messages, picks },
-          });
-          mcp.disconnect();
-          const payload = JSON.parse(toolRes.content?.[0]?.text || "{}");
-          if (payload?.reply) {
-            (response as any).message = payload.reply;
-          } else {
-            (response as any).message = await this.formatWithLLM(
-              validatedQuery.query,
-              picks
-            ).catch(
-              async () =>
-                await this.formatPicksAsNaturalMessage(
-                  validatedQuery.query,
-                  picks
-                )
-            );
-          }
-          if (payload?.image?.imageBase64) {
-            (response as any).paletteImage = payload.image;
-            (response as any).imageIntent = true;
-          }
-        } catch (e) {
-          console.error(`[AiController] MCP chat fallback to LLM:`, e);
-          (response as any).message = await this.formatWithLLM(
-            validatedQuery.query,
-            picks
-          ).catch(
-            async () =>
-              await this.formatPicksAsNaturalMessage(
-                validatedQuery.query,
-                picks
-              )
-          );
-        }
-      } else {
-        (response as any).imageIntent = false;
-        (response as any).message =
-          picks.length === 0
-            ? "Não encontrei tintas com esses critérios. Pode me dizer o ambiente (sala, quarto...), acabamento (fosco, acetinado...) e a cor desejada?"
-            : await this.formatPicksAsNaturalMessage(
-                validatedQuery.query,
-                picks
-              );
-      }
-
-      res.json(response);
-    } catch (error: any) {
-      console.error(`[AiController] Erro na recomendação:`, error);
-
-      if (error instanceof ZodError) {
-        return res.status(400).json({
-          error: "validation_error",
-          details: error.errors,
-        });
-      }
-
-      res.status(500).json({
-        error: "internal_error",
-        message: "Erro interno no processamento da recomendação",
-      });
-    }
-  }
-
+  /**
+   * @swagger
+   * /ai/search:
+   *   post:
+   *     summary: Semantic search for paints
+   *     description: Performs semantic search to find paints based on natural language query
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/SemanticSearchRequest'
+   *           example:
+   *             query: "tinta azul para quarto infantil"
+   *     responses:
+   *       200:
+   *         description: Successful semantic search results
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/SemanticSearchResponse'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async semanticSearch(req: Request, res: Response) {
     try {
       const { query } = req.body;
@@ -580,13 +549,69 @@ export class AiController {
     }
   }
 
+  /**
+   * @swagger
+   * /ai/palette-image:
+   *   post:
+   *     summary: Generate palette image
+   *     description: Generates a palette image based on paint colors and scene
+   *     tags: [AI]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               sceneId:
+   *                 type: string
+   *                 description: Scene identifier for image generation
+   *               hex:
+   *                 type: string
+   *                 pattern: "^#[0-9A-Fa-f]{6}$"
+   *                 description: Hex color code
+   *               finish:
+   *                 type: string
+   *                 description: Paint finish type
+   *             required:
+   *               - sceneId
+   *               - hex
+   *     responses:
+   *       200:
+   *         description: Successful image generation
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 imageBase64:
+   *                   type: string
+   *                   description: Base64 encoded image
+   *                 provider:
+   *                   type: string
+   *                   description: Image generation provider used
+   *       400:
+   *         description: Bad request - missing required fields
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   async generatePaletteImage(req: Request, res: Response) {
     try {
       const body = req.body as Partial<GenInput>;
       if (!body?.sceneId || !body?.hex) {
         return res.status(400).json({
           error: "validation_error",
-          message: "sceneId and hex are required",
+          message: "sceneId e hex são obrigatórios",
         });
       }
       // Fast path if provider is local: avoid spawning MCP for latency in CI/E2E
@@ -645,56 +670,6 @@ export class AiController {
       return res
         .status(500)
         .json({ error: "internal_error", message: "Erro ao gerar imagem" });
-    }
-  }
-
-  async recommendWithMCP(req: Request, res: Response) {
-    try {
-      // Validar entrada com Zod
-      const validatedQuery = RecommendationQuerySchema.parse(req.body);
-
-      const agent = await this.getRecommendationAgent();
-      const result = await agent.recommend({
-        query: validatedQuery.query,
-        context: {
-          filters: validatedQuery.filters,
-        },
-        sessionId:
-          (req as any).session?.id || req.headers["x-session-id"]?.toString(),
-        history: (req.body && req.body.history) || [],
-        useMCP: true,
-      });
-
-      // Converter para o formato esperado pelo frontend
-      const picks = result.map((pick) => ({
-        id: pick.id,
-        reason: pick.reason,
-      }));
-      const response = {
-        picks,
-        notes: `Encontradas ${result.length} tintas usando MCP (Model Context Protocol).`,
-        mcpEnabled: true,
-        message: await this.formatWithLLM(validatedQuery.query, picks).catch(
-          async () =>
-            await this.formatPicksAsNaturalMessage(validatedQuery.query, picks)
-        ),
-      } as any;
-
-      res.json(response);
-    } catch (error: any) {
-      console.error(`[AiController] Erro na recomendação MCP:`, error);
-
-      if (error instanceof ZodError) {
-        return res.status(400).json({
-          error: "validation_error",
-          details: error.errors,
-        });
-      }
-
-      res.status(500).json({
-        error: "internal_error",
-        message: "Erro interno no processamento da recomendação MCP",
-      });
     }
   }
 }

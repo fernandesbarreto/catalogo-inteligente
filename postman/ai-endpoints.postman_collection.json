@@ -2,10 +2,63 @@
   "info": {
     "name": "Catalogo Inteligente - AI Endpoints",
     "_postman_id": "ai-endpoints-collection-123",
-    "description": "AI endpoints for paint recommendations and semantic search. No authentication required.",
+    "description": "AI endpoints for paint recommendations, semantic search, and image generation. Authentication required for most endpoints.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
+    {
+      "name": "AI Chat - Unified Recommendations",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userMessage\": \"Preciso de uma tinta azul para o quarto do meu filho\",\n  \"history\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá, preciso de ajuda para escolher tintas\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Olá! Posso te ajudar a escolher a tinta ideal. Que tipo de ambiente você quer pintar?\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/chat",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "chat"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has picks and message', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('message');",
+              "});",
+              "pm.test('Picks is array', () => Array.isArray(json.picks));",
+              "if (json.paletteImage) {",
+              "  pm.test('Has palette image', () => {",
+              "    pm.expect(json.paletteImage).to.have.property('imageBase64');",
+              "    pm.expect(json.paletteImage).to.have.property('provider');",
+              "  });",
+              "}",
+              "console.log('AI recommended', json.picks.length, 'paints');",
+              "console.log('Message:', json.message);",
+              "if (json.paletteImage) {",
+              "  console.log('Generated palette image with provider:', json.paletteImage.provider);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
     {
       "name": "Semantic Search",
       "request": {
@@ -14,6 +67,10 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
           }
         ],
         "body": {
@@ -48,23 +105,27 @@
       ]
     },
     {
-      "name": "Get Paint Recommendations",
+      "name": "Generate Palette Image",
       "request": {
         "method": "POST",
         "header": [
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\"query\": \"tinta para sala de estar moderna\"}"
+          "raw": "{\n  \"sceneId\": \"quarto/01\",\n  \"hex\": \"#5FA3D1\",\n  \"finish\": \"fosco\",\n  \"size\": \"1024x1024\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/ai/recommendations",
+          "raw": "{{baseUrl}}/ai/palette-image",
           "host": ["{{baseUrl}}"],
-          "path": ["ai", "recommendations"]
+          "path": ["ai", "palette-image"]
         }
       },
       "event": [
@@ -75,36 +136,43 @@
             "exec": [
               "pm.test('Status 200', () => pm.response.to.have.status(200));",
               "const json = pm.response.json();",
-              "pm.test('Has picks and notes', () => {",
-              "  pm.expect(json).to.have.property('picks');",
-              "  pm.expect(json).to.have.property('notes');",
+              "pm.test('Has image data', () => {",
+              "  pm.expect(json).to.have.property('imageBase64');",
+              "  pm.expect(json).to.have.property('provider');",
               "});",
-              "pm.test('Picks is array', () => Array.isArray(json.picks));",
-              "console.log('AI recommended', json.picks.length, 'paints');",
-              "console.log('Notes:', json.notes);"
+              "pm.test('Image is base64', () => {",
+              "  pm.expect(json.imageBase64).to.be.a('string');",
+              "  pm.expect(json.imageBase64.length).to.be.greaterThan(1000);",
+              "});",
+              "console.log('Generated image with provider:', json.provider);",
+              "console.log('Image size:', json.imageBase64.length, 'characters');"
             ]
           }
         }
       ]
     },
     {
-      "name": "Search for External Paint",
+      "name": "AI Chat - Image Generation Request",
       "request": {
         "method": "POST",
         "header": [
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\"query\": \"tinta para área externa resistente ao clima\"}"
+          "raw": "{\n  \"userMessage\": \"Gera uma imagem da sala pintada de azul\",\n  \"history\": []\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/ai/search",
+          "raw": "{{baseUrl}}/ai/chat",
           "host": ["{{baseUrl}}"],
-          "path": ["ai", "search"]
+          "path": ["ai", "chat"]
         }
       },
       "event": [
@@ -115,31 +183,45 @@
             "exec": [
               "pm.test('Status 200', () => pm.response.to.have.status(200));",
               "const json = pm.response.json();",
-              "pm.test('Returns search results', () => Array.isArray(json));",
-              "console.log('Found', json.length, 'external paints');"
+              "pm.test('Has response structure', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('message');",
+              "});",
+              "if (json.paletteImage) {",
+              "  pm.test('Generated image successfully', () => {",
+              "    pm.expect(json.paletteImage).to.have.property('imageBase64');",
+              "    pm.expect(json.paletteImage).to.have.property('provider');",
+              "  });",
+              "  console.log('Generated palette image with provider:', json.paletteImage.provider);",
+              "}",
+              "console.log('Message:', json.message);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Get Bathroom Paint Recommendations",
+      "name": "AI Chat - Bathroom Paint Request",
       "request": {
         "method": "POST",
         "header": [
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\"query\": \"tinta para banheiro antimofo\"}"
+          "raw": "{\n  \"userMessage\": \"Preciso de uma tinta para banheiro que seja antimofo\",\n  \"history\": []\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/ai/recommendations",
+          "raw": "{{baseUrl}}/ai/chat",
           "host": ["{{baseUrl}}"],
-          "path": ["ai", "recommendations"]
+          "path": ["ai", "chat"]
         }
       },
       "event": [
@@ -152,67 +234,37 @@
               "const json = pm.response.json();",
               "pm.test('Has recommendations', () => {",
               "  pm.expect(json).to.have.property('picks');",
-              "  pm.expect(json).to.have.property('notes');",
+              "  pm.expect(json).to.have.property('message');",
               "});",
-              "console.log('AI recommended', json.picks.length, 'bathroom paints');"
+              "console.log('AI recommended', json.picks.length, 'bathroom paints');",
+              "console.log('Message:', json.message);"
             ]
           }
         }
       ]
     },
     {
-      "name": "Search for Kitchen Paint",
+      "name": "AI Chat - Kitchen Paint Request",
       "request": {
         "method": "POST",
         "header": [
           {
             "key": "Content-Type",
             "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\"query\": \"tinta para cozinha resistente a gordura\"}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/ai/search",
-          "host": ["{{baseUrl}}"],
-          "path": ["ai", "search"]
-        }
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));",
-              "const json = pm.response.json();",
-              "pm.test('Returns search results', () => Array.isArray(json));",
-              "console.log('Found', json.length, 'kitchen paints');"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Get Modern Living Room Recommendations",
-      "request": {
-        "method": "POST",
-        "header": [
+          },
           {
-            "key": "Content-Type",
-            "value": "application/json"
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\"query\": \"tinta moderna para sala de estar elegante\"}"
+          "raw": "{\n  \"userMessage\": \"Quero uma tinta para cozinha que seja resistente a gordura\",\n  \"history\": []\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/ai/recommendations",
+          "raw": "{{baseUrl}}/ai/chat",
           "host": ["{{baseUrl}}"],
-          "path": ["ai", "recommendations"]
+          "path": ["ai", "chat"]
         }
       },
       "event": [
@@ -225,9 +277,138 @@
               "const json = pm.response.json();",
               "pm.test('Has recommendations', () => {",
               "  pm.expect(json).to.have.property('picks');",
-              "  pm.expect(json).to.have.property('notes');",
+              "  pm.expect(json).to.have.property('message');",
               "});",
-              "console.log('AI recommended', json.picks.length, 'modern living room paints');"
+              "console.log('AI recommended', json.picks.length, 'kitchen paints');",
+              "console.log('Message:', json.message);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Chat - Modern Living Room",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userMessage\": \"Preciso de uma tinta moderna para sala de estar elegante\",\n  \"history\": []\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/chat",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "chat"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has recommendations', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('message');",
+              "});",
+              "console.log('AI recommended', json.picks.length, 'modern living room paints');",
+              "console.log('Message:', json.message);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Chat - External Paint",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userMessage\": \"Preciso de uma tinta para área externa que seja resistente ao clima\",\n  \"history\": []\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/chat",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "chat"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has recommendations', () => {",
+              "  pm.expect(json).to.have.property('picks');",
+              "  pm.expect(json).to.have.property('message');",
+              "});",
+              "console.log('AI recommended', json.picks.length, 'external paints');",
+              "console.log('Message:', json.message);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Palette Image - Different Scene",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sceneId\": \"sala/01\",\n  \"hex\": \"#E8B4B8\",\n  \"finish\": \"acetinado\",\n  \"size\": \"1024x768\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/palette-image",
+          "host": ["{{baseUrl}}"],
+          "path": ["ai", "palette-image"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Has image data', () => {",
+              "  pm.expect(json).to.have.property('imageBase64');",
+              "  pm.expect(json).to.have.property('provider');",
+              "});",
+              "console.log('Generated image with provider:', json.provider);"
             ]
           }
         }
@@ -238,6 +419,10 @@
     {
       "key": "baseUrl",
       "value": "http://localhost:3000/bff"
+    },
+    {
+      "key": "accessToken",
+      "value": "your-jwt-token-here"
     }
   ]
 }

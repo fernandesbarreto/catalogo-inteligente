@@ -4,7 +4,7 @@ import { Paint } from "../types";
 // Constants
 const PAINTS_PER_PAGE = 15;
 
-export const usePaints = () => {
+export const usePaints = (token?: string | null) => {
   const [paints, setPaints] = useState<Paint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,12 +24,26 @@ export const usePaints = () => {
         ...(searchQuery && { q: searchQuery }),
       });
 
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
-        `http://localhost:3000/bff/paints/public?${params}`
+        `http://localhost:3000/bff/paints/public?${params}`,
+        { headers }
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        if (response.status === 401) {
+          throw new Error("Sessão expirada. Por favor, faça login novamente.");
+        }
+        if (response.status === 403) {
+          throw new Error("Acesso negado. Verifique suas permissões.");
+        }
+        throw new Error(
+          `Erro no servidor (${response.status}). Tente novamente.`
+        );
       }
 
       const data = await response.json();

@@ -27,18 +27,16 @@ export class SemanticSearchTool implements ISearchTool {
 
       const docs = (await Promise.race([searchPromise, timeoutPromise])) as any;
 
-      console.log(
-        `[SemanticSearchTool] Encontrados ${docs.length} resultados semânticos`
-      );
+      console.log(`[SemanticSearchTool] Found ${docs.length} semantic results`);
 
-      // Filtrar apenas documentos com IDs válidos e metadados completos
+      // Filter only documents with valid IDs and complete metadata
       let validDocs = docs.filter((doc: any) => {
         const metadata = doc.metadata || {};
         return metadata.id && metadata.name && metadata.color;
       });
 
       console.log(
-        `[SemanticSearchTool] Documentos válidos: ${validDocs.length}/${docs.length}`
+        `[SemanticSearchTool] Valid documents: ${validDocs.length}/${docs.length}`
       );
 
       // Aplicar filtros nos metadados quando existirem
@@ -82,18 +80,18 @@ export class SemanticSearchTool implements ISearchTool {
         });
 
         console.log(
-          `[SemanticSearchTool] Após filtros: ${validDocs.length}/${docs.length}`
+          `[SemanticSearchTool] After filters: ${validDocs.length}/${docs.length}`
         );
       }
 
-      // Se não há documentos válidos, retornar array vazio
+      // If there are no valid documents, return empty array
       if (validDocs.length === 0) {
-        console.log(`[SemanticSearchTool] Nenhum documento válido encontrado`);
+        console.log(`[SemanticSearchTool] No valid documents found`);
         return [];
       }
 
-      // Guard-rail adicional: Se a query não contém palavras relacionadas a tintas/cores,
-      // considerar que não há resultados relevantes
+      // Additional guard-rail: If the query doesn't contain words related to paints/colors,
+      // consider that there are no relevant results
       const paintRelatedKeywords = [
         "tinta",
         "pintura",
